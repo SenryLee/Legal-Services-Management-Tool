@@ -1,0 +1,34 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "法律人业务管理系统",
+  "version": "0.1.0",
+  "identifier": "com.local.legalbiz",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "法律人业务管理系统",
+        "width": 1440,
+        "height": 920,
+        "minWidth": 1080,
+        "minHeight": 720
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "msi", "nsis"],
+    "category": "Business",
+    "shortDescription": "本地 Markdown 法律业务管理系统",
+    "longDescription": "客户、合同、诉讼、非诉、开票、日历和利益冲突检查均保存在本地 Markdown 工作区。"
+  }
+}
