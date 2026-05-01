@@ -1,0 +1,17 @@
+export default function BrandLogo() {
+  return (
+    <div className="brand-mark" aria-label="logo">
+      <svg viewBox="0 0 32 32" width="34" height="34" xmlns="http://www.w3.org/2000/svg">
+        <rect x="6" y="6" width="20" height="14" rx="2" fill="#c92929" />
+        <rect x="9" y="9" width="14" height="8" rx="1" fill="#fffaf0" />
+        <rect x="12" y="12" width="2" height="2" fill="#c92929" />
+        <rect x="18" y="12" width="2" height="2" fill="#c92929" />
+        <rect x="11" y="20" width="3" height="6" fill="#c92929" />
+        <rect x="18" y="20" width="3" height="6" fill="#c92929" />
+        <rect x="20" y="14" width="6" height="6" rx="1" fill="#7a3010" />
+        <rect x="21" y="15" width="4" height="1" fill="#fffaf0" />
+        <rect x="21" y="17" width="4" height="1" fill="#fffaf0" />
+      </svg>
+    </div>
+  )
+}
