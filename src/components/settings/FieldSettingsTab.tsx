@@ -6,6 +6,18 @@ import { saveConfig } from '../../storage'
 import { fieldTypes, fieldTypeLabel } from '../../shared/constants'
 import { friendlyError } from '../../shared/utils'
 
+const optionTypes = new Set<FieldType>(['single_select', 'multi_select'])
+
+const parseOptions = (text: string) =>
+  Array.from(
+    new Set(
+      text
+        .split(/\r?\n|[,，、；;]/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  )
+
 export default function FieldSettingsTab({
   config,
   workspacePath,
@@ -19,7 +31,12 @@ export default function FieldSettingsTab({
 }) {
   const [draft, setDraft] = useState(config)
   const [moduleKey, setModuleKey] = useState<ModuleKey>('litigation')
-  const [newField, setNewField] = useState({ key: '', label: '', type: 'text' as FieldType })
+  const [newField, setNewField] = useState({
+    key: '',
+    label: '',
+    type: 'text' as FieldType,
+    optionsText: '',
+  })
 
   useEffect(() => {
     setDraft(config)
@@ -41,6 +58,7 @@ export default function FieldSettingsTab({
       builtIn: false,
       ledger: true,
       filterable: true,
+      options: optionTypes.has(newField.type) ? parseOptions(newField.optionsText) : undefined,
     }
     setDraft({
       ...draft,
@@ -49,7 +67,7 @@ export default function FieldSettingsTab({
         [moduleKey]: { ...moduleDef, fields: [...moduleDef.fields, nextField] },
       },
     })
-    setNewField({ key: '', label: '', type: 'text' })
+    setNewField({ key: '', label: '', type: 'text', optionsText: '' })
   }
 
   const toggleField = (fieldKey: string, patch: Partial<FieldDefinition>) => {
@@ -181,6 +199,17 @@ export default function FieldSettingsTab({
             ))}
           </select>
         </label>
+        {optionTypes.has(newField.type) ? (
+          <label className="field">
+            选项
+            <textarea
+              value={newField.optionsText}
+              onChange={(event) => setNewField({ ...newField, optionsText: event.target.value })}
+              placeholder={'每行一个选项，也可用逗号/顿号/分号分隔\n例如：高\n中\n低'}
+            />
+            <small>留空时不会生成结构化选项，表单会按普通输入处理。</small>
+          </label>
+        ) : null}
         <button type="button" onClick={addField}>
           <Plus size={16} /> 加入当前板块
         </button>

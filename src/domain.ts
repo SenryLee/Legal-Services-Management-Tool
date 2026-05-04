@@ -1,3 +1,5 @@
+import { localIsoDate } from './shared/date'
+
 export type ModuleKey =
   | 'client'
   | 'service_contract'
@@ -60,10 +62,17 @@ export interface RecordSummary {
   body?: string
 }
 
+export interface WorkspaceDiagnostic {
+  severity: 'warning'
+  message: string
+  path?: string
+}
+
 export interface WorkspaceSnapshot {
   workspacePath: string
   config: WorkspaceConfig
   records: RecordSummary[]
+  diagnostics: WorkspaceDiagnostic[]
 }
 
 export interface ConflictHit {
@@ -381,6 +390,8 @@ export const defaultConfig = (): WorkspaceConfig => ({
         field('received_at', '接收日期', 'date'),
         field('delivery_deadline', '交付期限', 'date'),
         field('review_round', '审查轮次', 'number'),
+        field('page_count', '页数', 'number'),
+        field('word_count', '字数', 'number'),
         field('status', '办理状态', 'single_select', {
           options: FIELD_OPTION_PRESETS.non_litigation?.status,
         }),
@@ -424,13 +435,14 @@ export const defaultConfig = (): WorkspaceConfig => ({
 })
 
 export const emptyRecordFor = (definition: ModuleDefinition) => {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localIsoDate()
   return Object.fromEntries(
     definition.fields.map((item) => {
       if (item.type === 'date') {
         return [item.key, ['created_at', 'check_date', 'date'].includes(item.key) ? today : '']
       }
       if (item.type === 'boolean') return [item.key, false]
+      if (item.type === 'multi_select') return [item.key, []]
       if (item.options?.length) return [item.key, '']
       return [item.key, '']
     }),
@@ -468,5 +480,5 @@ export const dateFromFields = (fields: Record<string, unknown>) => {
     if (typeof value === 'string' && value.length >= 7) return value
   }
 
-  return new Date().toISOString().slice(0, 10)
+  return localIsoDate()
 }

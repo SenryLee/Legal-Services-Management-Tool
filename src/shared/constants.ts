@@ -10,6 +10,7 @@ import {
   Users,
 } from 'lucide-react'
 import type { FieldType, ModuleKey, RecordSummary } from '../domain'
+import { localIsoDate } from './date'
 
 export type ModuleIcon = typeof LayoutDashboard
 
@@ -53,7 +54,8 @@ export const fieldTypeLabel: Record<FieldType, string> = {
   matter_ref: '事项引用',
 }
 
-export const today = new Date().toISOString().slice(0, 10)
+export const today = localIsoDate()
 export const currentMonth = today.slice(0, 7)
 export const emptyRecords: RecordSummary[] = []
 export const closedTaskStatuses = new Set(['已完成', '已取消', '归档', '已结案', '已交付', '已复盘'])
+export const closedInvoiceStatuses = new Set(['已开票', '无需开票', '已作废/红冲'])

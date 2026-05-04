@@ -215,6 +215,35 @@ button:disabled {
   align-items: center;
 }
 
+.diagnostic-banner {
+  margin: 18px 24px 0;
+  padding: 14px 16px;
+  border: 1px solid #d49b4a;
+  border-radius: 8px;
+  background: #fff5dc;
+  color: #3b2a12;
+}
+
+.diagnostic-banner div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diagnostic-banner ul {
+  margin: 8px 0 0;
+  padding-left: 22px;
+  color: #6a4a18;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.diagnostic-banner p {
+  margin: 8px 0 0;
+  color: #7a551d;
+  font-size: 12px;
+}
+
 .onboarding {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
@@ -521,6 +550,212 @@ button:disabled {
   background: #fff;
 }
 
+.calendar-month-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.dashboard-calendar {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+
+.calendar-grid-panel,
+.calendar-agenda-panel {
+  min-width: 0;
+  border: 1px solid #e5ddcf;
+  border-radius: 8px;
+  background: #fffaf1;
+}
+
+.calendar-grid-panel {
+  padding: 12px;
+}
+
+.calendar-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.calendar-head strong,
+.calendar-head span,
+.calendar-agenda-panel strong,
+.agenda-count {
+  display: block;
+}
+
+.calendar-head strong,
+.calendar-agenda-panel > strong {
+  color: #26221d;
+  font-size: 14px;
+}
+
+.calendar-head span,
+.calendar-agenda-panel p,
+.agenda-count {
+  margin-top: 3px;
+  color: #796f61;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.calendar-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.calendar-nav button {
+  min-height: 30px !important;
+  padding: 5px 9px !important;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.calendar-weekdays,
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-weekdays {
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.calendar-weekdays span {
+  color: #6d6255;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.calendar-days {
+  gap: 5px;
+}
+
+button.calendar-day,
+.calendar-day.empty {
+  min-height: 92px;
+  border: 1px solid #eadfce;
+  border-radius: 7px;
+  background: #fff;
+}
+
+button.calendar-day {
+  display: grid !important;
+  align-content: start;
+  justify-content: stretch;
+  gap: 6px;
+  padding: 7px !important;
+  text-align: left;
+}
+
+button.calendar-day:hover,
+button.calendar-day.selected {
+  border-color: #b7aa95;
+  background: #fff5df;
+}
+
+button.calendar-day.selected {
+  box-shadow: inset 0 0 0 1px #8f7d60;
+}
+
+.calendar-day.empty {
+  background: #fbf6ec;
+}
+
+.day-number {
+  display: inline-grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 999px;
+  color: #423a30;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.calendar-day.has-events .day-number {
+  border: 1px solid #b43a2a;
+  color: #a93123;
+  background: #fff2ec;
+}
+
+.day-events {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.day-events span,
+.day-events small {
+  overflow: hidden;
+  color: #5f554a;
+  font-size: 11px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-events span::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 4px;
+  border-radius: 999px;
+  background: #b43a2a;
+  vertical-align: 1px;
+}
+
+.day-events small {
+  color: #a93123;
+}
+
+.calendar-agenda-panel {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+}
+
+.calendar-agenda-list {
+  display: grid;
+  gap: 7px;
+}
+
+.calendar-agenda-list article {
+  display: grid;
+  gap: 3px;
+  padding: 9px;
+  border: 1px solid #eadfce;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.calendar-agenda-list article strong,
+.calendar-agenda-list article span,
+.calendar-agenda-list article small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-agenda-list article strong {
+  color: #26221d;
+  font-size: 12px;
+}
+
+.calendar-agenda-list article span,
+.calendar-agenda-list article small {
+  color: #796f61;
+  font-size: 11px;
+}
+
 table {
   width: 100%;
   min-width: 900px;
@@ -592,6 +827,39 @@ td span {
 
 .field small {
   color: #8a7c68;
+}
+
+button.reference-chip,
+button.relation-link {
+  justify-content: flex-start !important;
+  width: 100%;
+  min-height: 0 !important;
+  border-color: #cfd8df !important;
+  background: #f7fafb !important;
+  color: #314150 !important;
+  text-align: left;
+}
+
+button.reference-chip {
+  margin-top: 2px;
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+}
+
+button.relation-link {
+  display: grid !important;
+  gap: 3px;
+  padding: 5px 7px !important;
+  font-size: 12px !important;
+}
+
+button.relation-link small {
+  overflow: hidden;
+  color: #667888;
+  font-size: 10px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .conflict-box {
@@ -692,6 +960,7 @@ td span {
   .module-layout,
   .settings-layout,
   .ai-layout,
+  .calendar-month-view,
   .onboarding {
     grid-template-columns: 1fr;
   }
@@ -713,6 +982,23 @@ td span {
 
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  .calendar-month-view {
+    gap: 10px;
+  }
+
+  .calendar-head {
+    display: grid;
+  }
+
+  button.calendar-day,
+  .calendar-day.empty {
+    min-height: 76px;
+  }
+
+  button.calendar-day {
+    padding: 5px !important;
   }
 
   .wide-panel {
@@ -1003,6 +1289,26 @@ button.ghost {
   gap: 8px;
 }
 
+.conflict-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.conflict-section-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: #4a4036;
+}
+
+.conflict-section-title span {
+  color: #8a7e6c;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .conflict-hits .hit {
   border: 1px solid #ded8cb;
   border-radius: 6px;
@@ -1020,6 +1326,11 @@ button.ghost {
 .conflict-hits .hit.warn {
   border-color: #ddc78a;
   background: #fff7e0;
+}
+
+.conflict-hits .hit.candidate {
+  border-color: #cfd8df;
+  background: #f7fafb;
 }
 
 .conflict-hits .hit > div {
@@ -1043,6 +1354,16 @@ button.ghost {
 .conflict-hits .hit small {
   color: #8a7e6c;
   font-size: 11px;
+}
+
+.conflict-tip {
+  color: #8a7e6c;
+  font-size: 12px;
+  line-height: 1.55;
+  background: #f8f3e8;
+  border: 1px dashed #ded2bf;
+  border-radius: 6px;
+  padding: 8px 10px;
 }
 
 .empty-block {

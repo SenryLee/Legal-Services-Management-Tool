@@ -1,25 +1,32 @@
 import { useMemo } from 'react'
 import { CalendarDays, CheckCircle2, FileInput, Landmark, ListTodo, Plus, ReceiptText, Sparkles, Users } from 'lucide-react'
 import type { ModuleKey, RecordSummary } from '../domain'
-import { today } from '../shared/constants'
+import { closedInvoiceStatuses, today } from '../shared/constants'
 import { formatDateLabel, isClosedStatus, moneyValue, textValue } from '../shared/utils'
 import Metric from './Metric'
+import CalendarMonthView from './CalendarMonthView'
 
 export default function Dashboard({
   records,
   setActive,
   onSeedDemo,
+  month,
+  setMonth,
 }: {
   records: RecordSummary[]
   setActive: (key: ModuleKey) => void
   onSeedDemo: () => void
+  month: string
+  setMonth: (month: string) => void
 }) {
   const metrics = {
     client: records.filter((item) => item.module === 'client').length,
     litigation: records.filter((item) => item.module === 'litigation').length,
     nonLitigation: records.filter((item) => item.module === 'non_litigation').length,
     invoiceOpen: records.filter(
-      (item) => item.module === 'invoice' && item.fields.invoice_status !== '已开票',
+      (item) =>
+        item.module === 'invoice' &&
+        !closedInvoiceStatuses.has(textValue(item.fields.invoice_status)),
     ).length,
   }
 
@@ -37,7 +44,17 @@ export default function Dashboard({
           relatedMatter: textValue(item.fields.related_matter),
         }))
         .filter((item) => item.date && (item.date >= today || !isClosedStatus(item.status)))
-        .sort((left, right) => `${left.date} ${left.time}`.localeCompare(`${right.date} ${right.time}`))
+        .sort((left, right) => {
+          const leftIsUpcoming = left.date >= today
+          const rightIsUpcoming = right.date >= today
+          if (leftIsUpcoming !== rightIsUpcoming) return leftIsUpcoming ? -1 : 1
+
+          const leftValue = `${left.date} ${left.time}`
+          const rightValue = `${right.date} ${right.time}`
+          return leftIsUpcoming
+            ? leftValue.localeCompare(rightValue)
+            : rightValue.localeCompare(leftValue)
+        })
         .slice(0, 8),
     [records],
   )
@@ -115,7 +132,7 @@ export default function Dashboard({
 
       if (record.module === 'invoice') {
         const invoiceStatus = textValue(record.fields.invoice_status)
-        if (invoiceStatus && invoiceStatus !== '已开票' && invoiceStatus !== '无需开票') {
+        if (invoiceStatus && !closedInvoiceStatuses.has(invoiceStatus)) {
           const receivable = moneyValue(record.fields.receivable_amount)
           const paid = moneyValue(record.fields.paid_amount)
           items.push({
@@ -157,10 +174,17 @@ export default function Dashboard({
         onClick={() => setActive('invoice')}
       />
 
+      <CalendarMonthView
+        records={records}
+        month={month}
+        setMonth={setMonth}
+        className="dashboard-calendar"
+      />
+
       <section className="wide-panel">
         <div className="section-title">
           <div>
-            <h2>日历日程</h2>
+            <h2>近期日程</h2>
             <span>开庭、会议、交付、期限和跟进安排</span>
           </div>
           <button type="button" onClick={() => setActive('calendar_event')}>

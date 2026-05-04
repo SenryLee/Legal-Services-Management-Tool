@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core'
 import {
   defaultAiSettings,
   defaultConfig,
+  dateFromFields,
   PROVIDER_PRESETS,
   type AISettings,
   type AttachmentEntry,
@@ -202,6 +203,7 @@ const browserDemoSnapshot = (path: string): WorkspaceSnapshot => {
     workspacePath: path,
     config: { ...defaultConfig(), workspaceName: path || '浏览器演示工作区' },
     records,
+    diagnostics: [],
   }
 }
 
@@ -254,6 +256,7 @@ const loadDemo = (path: string): WorkspaceSnapshot => {
   parsed.workspacePath = path
   parsed.config.workspaceName = path || parsed.config.workspaceName
   parsed.config = mergeDefaultConfig(parsed.config)
+  parsed.diagnostics = parsed.diagnostics ?? []
   saveDemo(parsed)
   return parsed
 }
@@ -349,9 +352,7 @@ export const createRecord = async (
     calendar_event: 'CAL',
   }
   const next = snapshot.records.filter((item) => item.module === moduleKey).length + 1
-  const date = String(
-    fields.date ?? fields.opened_at ?? fields.created_at ?? new Date().toISOString().slice(0, 10),
-  )
+  const date = dateFromFields(fields)
   const id = `${prefix[moduleKey]}-${date.slice(0, 4)}-${String(next).padStart(4, '0')}`
   const title = String(fields.title ?? fields.name ?? fields.client_name ?? id)
 
@@ -553,24 +554,92 @@ export interface ConflictCandidate {
 }
 
 export interface AnnotatedConflictHit extends ConflictHit {
-  severity: 'block' | 'warn'
+  severity: 'block' | 'warn' | 'candidate'
+  score: number
+  matchQuery: string
+  matchStrength: 'exact' | 'strong' | 'weak'
+  sourceField: string
 }
 
 const norm = (value: string | undefined | null): string =>
   String(value ?? '').trim().toLowerCase()
 
-const splitTokens = (value: unknown): string[] => {
-  const text = typeof value === 'string' ? value : String(value ?? '')
-  return text
-    .split(/[,\n，、；;]/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 2)
+const compactText = (value: string): string =>
+  norm(value)
+    .replace(/\s+/g, '')
+    .replace(/[()（）【】<>《》]/g, '')
+    .replace(/\[/g, '')
+    .replace(/]/g, '')
+
+const genericConflictTerms = new Set([
+  '公司',
+  '有限',
+  '有限公司',
+  '股份',
+  '股份公司',
+  '股份有限公司',
+  '集团',
+  '控股',
+  '客户',
+  '个人',
+  '相对方',
+  '关联方',
+])
+
+const isMeaningfulConflictToken = (value: string): boolean => {
+  const token = compactText(value)
+  if (!token || genericConflictTerms.has(token)) return false
+  const chineseCount = (token.match(/[\u4e00-\u9fa5]/g) ?? []).length
+  if (chineseCount >= 2) return true
+  const latinOrNumberCount = (token.match(/[a-z0-9]/g) ?? []).length
+  return latinOrNumberCount >= 3
 }
 
-const includesEither = (haystack: string, needle: string): boolean => {
-  const a = norm(haystack)
-  const b = norm(needle)
-  return a.length > 0 && b.length > 0 && (a.includes(b) || b.includes(a))
+const splitTokens = (value: unknown): string[] => {
+  const text = typeof value === 'string' ? value : String(value ?? '')
+  const tokens = text
+    .split(/[,\n，、；;/|]/)
+    .map((token) => token.trim())
+    .filter(isMeaningfulConflictToken)
+  return Array.from(new Set(tokens))
+}
+
+const matchConflictText = (
+  haystack: string,
+  needle: string,
+): { strength: AnnotatedConflictHit['matchStrength']; score: number } | null => {
+  const a = compactText(haystack)
+  const b = compactText(needle)
+  if (!a || !b || !isMeaningfulConflictToken(needle)) return null
+  if (a === b) return { strength: 'exact', score: 100 }
+  if (a.includes(b)) {
+    const coverage = Math.min(1, b.length / Math.max(a.length, 1))
+    return { strength: coverage >= 0.5 ? 'strong' : 'weak', score: 60 + Math.round(coverage * 30) }
+  }
+  if (b.includes(a) && isMeaningfulConflictToken(haystack)) {
+    const coverage = Math.min(1, a.length / Math.max(b.length, 1))
+    return { strength: 'strong', score: 70 + Math.round(coverage * 20) }
+  }
+  return null
+}
+
+const moduleLabel = (module: ModuleKey): string => {
+  const labels: Record<ModuleKey, string> = {
+    client: '客户',
+    conflict_check: '利冲检查',
+    service_contract: '服务合同',
+    litigation: '诉讼事项',
+    non_litigation: '非诉事项',
+    invoice: '发票',
+    calendar_event: '日程',
+  }
+  return labels[module]
+}
+
+const severityWeight: Record<AnnotatedConflictHit['severity'], number> = {
+  block: 300,
+  warn: 200,
+  candidate: 100,
 }
 
 export const analyzeClientConflicts = (
@@ -583,51 +652,78 @@ export const analyzeClientConflicts = (
     record.module === 'non_litigation' ||
     record.module === 'service_contract',
   )
-
-  const opponents = Array.from(
-    new Set((candidate.opposingParties ?? []).flatMap((value) => splitTokens(value))),
+  const searchableRecords = records.filter((record) =>
+    record.module === 'client' ||
+    record.module === 'litigation' ||
+    record.module === 'non_litigation' ||
+    record.module === 'service_contract' ||
+    record.module === 'conflict_check',
   )
-  const related = Array.from(
-    new Set((candidate.relatedParties ?? []).flatMap((value) => splitTokens(value))),
-  )
-  const proposed = (candidate.proposedClient ?? '').trim()
 
-  const hits: AnnotatedConflictHit[] = []
-  const seen = new Set<string>()
+  const opponents = (candidate.opposingParties ?? []).flatMap((value) => splitTokens(value))
+  const related = (candidate.relatedParties ?? []).flatMap((value) => splitTokens(value))
+  const proposedTokens = splitTokens(candidate.proposedClient ?? '')
+
+  const hits = new Map<string, AnnotatedConflictHit>()
   const push = (hit: AnnotatedConflictHit) => {
-    const key = `${hit.id}|${hit.matchedField}|${hit.reason}`
-    if (seen.has(key)) return
-    seen.add(key)
-    hits.push(hit)
+    const key = `${hit.id}|${hit.sourceField}|${hit.matchQuery}`
+    const current = hits.get(key)
+    const currentRank = current ? severityWeight[current.severity] + current.score : -1
+    const nextRank = severityWeight[hit.severity] + hit.score
+    if (!current || nextRank > currentRank) hits.set(key, hit)
+  }
+  const pushMatch = (
+    record: RecordSummary,
+    query: string,
+    sourceField: string,
+    matchedField: string,
+    matchedValue: string,
+    severity: AnnotatedConflictHit['severity'],
+    reason: string,
+    baseScore: number,
+  ) => {
+    const match = matchConflictText(matchedValue, query)
+    if (!match) return
+    push({
+      id: record.id,
+      module: record.module,
+      title: record.title,
+      matchedField,
+      matchedValue,
+      reason,
+      severity,
+      score: baseScore + match.score,
+      matchQuery: query,
+      matchStrength: match.strength,
+      sourceField,
+    })
   }
 
   // 1) 相对方撞名现有客户 / 现有客户的关联方
   for (const opp of opponents) {
     for (const client of clients) {
       const name = String(client.fields.name ?? client.title ?? '')
-      if (name && includesEither(name, opp)) {
-        push({
-          id: client.id,
-          module: 'client',
-          title: client.title,
-          matchedField: 'name',
-          matchedValue: name,
-          reason: `相对方「${opp}」与现有客户「${client.title}」重名，建议拒绝接案。`,
-          severity: 'block',
-        })
-      }
+      pushMatch(
+        client,
+        opp,
+        '相对方',
+        'name',
+        name,
+        'block',
+        `相对方「${opp}」与现有客户「${client.title}」匹配，建议拒绝接案。`,
+        80,
+      )
       const relatedParties = String(client.fields.related_parties ?? '')
-      if (relatedParties && includesEither(relatedParties, opp)) {
-        push({
-          id: client.id,
-          module: 'client',
-          title: client.title,
-          matchedField: 'related_parties',
-          matchedValue: relatedParties,
-          reason: `相对方「${opp}」出现在现有客户「${client.title}」的关联方列表中。`,
-          severity: 'block',
-        })
-      }
+      pushMatch(
+        client,
+        opp,
+        '相对方',
+        'related_parties',
+        relatedParties,
+        'block',
+        `相对方「${opp}」出现在现有客户「${client.title}」的关联方列表中。`,
+        68,
+      )
     }
   }
 
@@ -635,53 +731,126 @@ export const analyzeClientConflicts = (
   for (const rel of related) {
     for (const client of clients) {
       const name = String(client.fields.name ?? client.title ?? '')
-      if (name && includesEither(name, rel)) {
-        push({
-          id: client.id,
-          module: 'client',
-          title: client.title,
-          matchedField: 'name',
-          matchedValue: name,
-          reason: `拟接案的关联方「${rel}」与现有客户「${client.title}」重名，需进一步核查关系。`,
-          severity: 'warn',
-        })
-      }
+      pushMatch(
+        client,
+        rel,
+        '关联方',
+        'name',
+        name,
+        'warn',
+        `拟接案的关联方「${rel}」与现有客户「${client.title}」匹配，需进一步核查关系。`,
+        70,
+      )
+      const relatedParties = String(client.fields.related_parties ?? '')
+      pushMatch(
+        client,
+        rel,
+        '关联方',
+        'related_parties',
+        relatedParties,
+        'warn',
+        `拟接案的关联方「${rel}」出现在现有客户「${client.title}」的关联方列表中。`,
+        52,
+      )
     }
   }
 
   // 3) 拟委托人是现有客户的历史相对方 / 在已有事项中作为相对方出现
-  if (proposed) {
+  for (const proposed of proposedTokens) {
     for (const client of clients) {
       const opps = String(client.fields.opponents ?? '')
-      if (opps && includesEither(opps, proposed)) {
-        push({
-          id: client.id,
-          module: 'client',
-          title: client.title,
-          matchedField: 'opponents',
-          matchedValue: opps,
-          reason: `拟委托人「${proposed}」是现有客户「${client.title}」的历史相对方。`,
-          severity: 'block',
-        })
-      }
+      pushMatch(
+        client,
+        proposed,
+        '拟委托人',
+        'opponents',
+        opps,
+        'block',
+        `拟委托人「${proposed}」是现有客户「${client.title}」的历史相对方。`,
+        78,
+      )
+      const name = String(client.fields.name ?? client.title ?? '')
+      pushMatch(
+        client,
+        proposed,
+        '拟委托人',
+        'name',
+        name,
+        'candidate',
+        `拟委托人「${proposed}」疑似匹配现有客户「${client.title}」，可直接查看既有客户信息。`,
+        34,
+      )
+      const relatedParties = String(client.fields.related_parties ?? '')
+      pushMatch(
+        client,
+        proposed,
+        '拟委托人',
+        'related_parties',
+        relatedParties,
+        'warn',
+        `拟委托人「${proposed}」出现在现有客户「${client.title}」的关联方列表中，建议核查是否存在关系冲突。`,
+        50,
+      )
     }
     for (const matter of matters) {
       const opp = String(matter.fields.opposing_parties ?? '')
-      if (opp && includesEither(opp, proposed)) {
-        push({
-          id: matter.id,
-          module: matter.module,
-          title: matter.title,
-          matchedField: 'opposing_parties',
-          matchedValue: opp,
-          reason: `拟委托人「${proposed}」在已有事项「${matter.title}」中作为相对方出现。`,
-          severity: 'block',
-        })
+      pushMatch(
+        matter,
+        proposed,
+        '拟委托人',
+        'opposing_parties',
+        opp,
+        'block',
+        `拟委托人「${proposed}」在已有事项「${matter.title}」中作为相对方出现。`,
+        74,
+      )
+    }
+  }
+
+  const candidateQueries = [
+    ...proposedTokens.map((value) => ({ value, sourceField: '拟委托人' })),
+    ...opponents.map((value) => ({ value, sourceField: '相对方' })),
+    ...related.map((value) => ({ value, sourceField: '关联方' })),
+  ]
+  const candidateFields = [
+    { key: 'name', label: '客户名称' },
+    { key: 'client_name', label: '客户/委托人' },
+    { key: 'opposing_parties', label: '相对方' },
+    { key: 'related_parties', label: '关联方' },
+    { key: 'opponents', label: '历史相对方' },
+    { key: 'contacts', label: '联系人' },
+    { key: 'title', label: '标题' },
+  ]
+
+  for (const query of candidateQueries) {
+    for (const record of searchableRecords) {
+      for (const field of candidateFields) {
+        const value = field.key === 'title'
+          ? record.title
+          : String(record.fields[field.key] ?? '')
+        if (!value) continue
+        pushMatch(
+          record,
+          query.value,
+          query.sourceField,
+          field.key,
+          value,
+          'candidate',
+          `${query.sourceField}「${query.value}」匹配${moduleLabel(record.module)}「${record.title}」的${field.label}，可作为候选信息核对。`,
+          field.key === 'title' ? 10 : 22,
+        )
       }
     }
   }
 
-  return hits
+  const sorted = Array.from(hits.values()).sort((a, b) => {
+    const severityDiff = severityWeight[b.severity] - severityWeight[a.severity]
+    if (severityDiff !== 0) return severityDiff
+    return b.score - a.score
+  })
+  const required = sorted.filter((hit) => hit.severity !== 'candidate')
+  const candidates = sorted.filter((hit) => hit.severity === 'candidate').slice(0, 8)
+  return [...required, ...candidates]
 }
 
 // ---------------------------------------------------------------------------
@@ -825,6 +994,75 @@ export const draftToFormPatch = (draft: ExtractionDraft): Record<string, unknown
  */
 const TEXT_DECODE_LIMIT = 10 * 1024 * 1024 // 纯文本 10 MB
 const PDF_DOCX_LIMIT = 30 * 1024 * 1024 // PDF/DOCX 30 MB
+
+export interface WordDocumentStats {
+  fileName: string
+  pageCount: number
+  wordCount: number
+  pageSource: 'metadata' | 'estimated'
+  wordSource: 'metadata' | 'text'
+}
+
+type JSZipModule = typeof import('jszip')
+type JSZipInstance = Awaited<ReturnType<JSZipModule['loadAsync']>>
+
+const loadJSZip = async (): Promise<JSZipModule> => {
+  // jszip 用 `export = JSZip`，esModuleInterop 下默认会包装成 { default: JSZip }
+  // 但 TS 类型解析有时给的是 JSZip 本体；都兼容一下。
+  try {
+    const mod = (await import('jszip')) as unknown as JSZipModule | { default: JSZipModule }
+    return (mod as { default?: JSZipModule }).default ?? (mod as JSZipModule)
+  } catch (error) {
+    throw new Error(
+      `DOCX 解析引擎加载失败：${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    )
+  }
+}
+
+const loadDocxZip = async (file: File): Promise<JSZipInstance> => {
+  const JSZipCtor = await loadJSZip()
+  const buffer = await file.arrayBuffer()
+  try {
+    return await JSZipCtor.loadAsync(buffer)
+  } catch (error) {
+    throw new Error(
+      `DOCX 打开失败：${error instanceof Error ? error.message : String(error)}。可能是文件损坏或不是有效 docx。`,
+      { cause: error },
+    )
+  }
+}
+
+const parseXml = (xml: string, failureMessage: string): Document => {
+  const dom = new DOMParser().parseFromString(xml, 'application/xml')
+  if (dom.getElementsByTagName('parsererror').length > 0) {
+    throw new Error(failureMessage)
+  }
+  return dom
+}
+
+const optionalPositiveInt = (value: string | null | undefined): number | null => {
+  if (!value) return null
+  const parsed = Number.parseInt(value.trim(), 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+const firstTagNumber = (dom: Document, tagNames: string[]): number | null => {
+  for (const tagName of tagNames) {
+    const value = optionalPositiveInt(dom.getElementsByTagName(tagName)[0]?.textContent)
+    if (value) return value
+  }
+  return null
+}
+
+const wordCountFromText = (text: string): number => {
+  const chineseChars = text.match(/[\u3400-\u9fff]/g)?.length ?? 0
+  const latinWords = text.match(/[A-Za-z0-9]+(?:[-'][A-Za-z0-9]+)*/g)?.length ?? 0
+  return chineseChars + latinWords
+}
+
+const estimatePagesFromText = (text: string): number =>
+  Math.max(1, Math.ceil(Math.max(wordCountFromText(text), text.length) / 900))
 
 const decodeAttempt = (
   buffer: ArrayBuffer,
@@ -1020,41 +1258,13 @@ const extractPdfText = async (file: File): Promise<string> => {
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
-const extractDocxText = async (file: File): Promise<string> => {
-  // jszip 用 `export = JSZip`，esModuleInterop 下默认会包装成 { default: JSZip }
-  // 但 TS 类型解析有时给的是 JSZip 本体；都兼容一下。
-  type JSZipModule = typeof import('jszip')
-  let JSZipCtor: JSZipModule
-  try {
-    const mod = (await import('jszip')) as unknown as JSZipModule | { default: JSZipModule }
-    JSZipCtor = (mod as { default?: JSZipModule }).default ?? (mod as JSZipModule)
-  } catch (error) {
-    throw new Error(
-      `DOCX 解析引擎加载失败：${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    )
-  }
-
-  const buffer = await file.arrayBuffer()
-  let zip: Awaited<ReturnType<JSZipModule['loadAsync']>>
-  try {
-    zip = await JSZipCtor.loadAsync(buffer)
-  } catch (error) {
-    throw new Error(
-      `DOCX 打开失败：${error instanceof Error ? error.message : String(error)}。可能是文件损坏或不是有效 docx。`,
-      { cause: error },
-    )
-  }
-
+const extractDocxTextFromZip = async (zip: JSZipInstance, fileName: string): Promise<string> => {
   const docFile = zip.file('word/document.xml')
   if (!docFile) {
     throw new Error('DOCX 缺少 word/document.xml，文件可能不是有效的 Word 文档。')
   }
   const docXml = await docFile.async('string')
-  const dom = new DOMParser().parseFromString(docXml, 'application/xml')
-  if (dom.getElementsByTagName('parsererror').length > 0) {
-    throw new Error('DOCX XML 解析失败，文件可能损坏。')
-  }
+  const dom = parseXml(docXml, 'DOCX XML 解析失败，文件可能损坏。')
 
   const paragraphs = Array.from(dom.getElementsByTagNameNS(W_NS, 'p'))
   const lines: string[] = []
@@ -1065,9 +1275,59 @@ const extractDocxText = async (file: File): Promise<string> => {
   }
   const out = lines.join('\n').replace(/\n{3,}/g, '\n\n').trim()
   if (!out) {
-    throw new Error(`DOCX "${file.name}" 中没有提取到任何文字。`)
+    throw new Error(`DOCX "${fileName}" 中没有提取到任何文字。`)
   }
   return out
+}
+
+const extractDocxText = async (file: File): Promise<string> => {
+  const zip = await loadDocxZip(file)
+  return extractDocxTextFromZip(zip, file.name)
+}
+
+export const readWordDocumentStats = async (file: File): Promise<WordDocumentStats> => {
+  const lower = file.name.toLowerCase()
+
+  if (lower.endsWith('.pdf')) {
+    throw new Error('不支持 PDF。此入口只用于 Word 文档页数/字数自动填表，请上传 .docx。')
+  }
+
+  if (lower.endsWith('.doc')) {
+    throw new Error('旧版 .doc 无法在当前前端环境可靠解析页数/字数。请先另存为 .docx 后重试。')
+  }
+
+  if (!lower.endsWith('.docx')) {
+    throw new Error('只支持 Word .docx 文档。PDF、旧版 .doc、图片和 Excel 暂不支持。')
+  }
+
+  if (file.size > PDF_DOCX_LIMIT) {
+    throw new Error(
+      `DOCX 过大（${(file.size / 1024 / 1024).toFixed(1)} MB）。建议拆分或另存精简版本（≤ 30 MB）。`,
+    )
+  }
+
+  const zip = await loadDocxZip(file)
+  let metadataPages: number | null = null
+  let metadataWords: number | null = null
+  const appFile = zip.file('docProps/app.xml')
+  if (appFile) {
+    const appXml = await appFile.async('string')
+    const appDom = parseXml(appXml, 'DOCX 元数据 XML 解析失败，文件可能损坏。')
+    metadataPages = firstTagNumber(appDom, ['Pages'])
+    metadataWords = firstTagNumber(appDom, ['Words'])
+  }
+
+  const needsTextFallback = !metadataPages || !metadataWords
+  const text = needsTextFallback ? await extractDocxTextFromZip(zip, file.name) : ''
+  const textWordCount = text ? wordCountFromText(text) : 0
+
+  return {
+    fileName: file.name,
+    pageCount: metadataPages ?? estimatePagesFromText(text),
+    wordCount: metadataWords ?? textWordCount,
+    pageSource: metadataPages ? 'metadata' : 'estimated',
+    wordSource: metadataWords ? 'metadata' : 'text',
+  }
 }
 
 // ---------------------------------------------------------------------------

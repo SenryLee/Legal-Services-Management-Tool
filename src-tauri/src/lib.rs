@@ -123,6 +123,22 @@ struct WorkspaceSnapshot {
     config: WorkspaceConfig,
     records: Vec<RecordSummary>,
     workspace_path: String,
+    #[serde(default)]
+    diagnostics: Vec<WorkspaceDiagnostic>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkspaceDiagnostic {
+    severity: String,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+}
+
+struct RecordReadResult {
+    records: Vec<RecordSummary>,
+    diagnostics: Vec<WorkspaceDiagnostic>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,7 +174,12 @@ fn open_workspace(workspace_path: String) -> AppResult<WorkspaceSnapshot> {
     if !root.is_dir() {
         return Err(format!("不是文件夹：{}", root.display()));
     }
-    create_workspace_dirs(&root)?;
+    if !is_initialized_workspace(&root) {
+        return Err(format!(
+            "这不是已初始化的 LegalBiz 工作区：缺少 {}",
+            workspace_config_path(&root).display()
+        ));
+    }
     load_snapshot(&root)
 }
 
@@ -378,7 +399,7 @@ fn generate_ledger_snapshot(
 #[tauri::command]
 fn workspace_exists(workspace_path: String) -> bool {
     match normalize_workspace_path(&workspace_path) {
-        Ok(root) => root.is_dir(),
+        Ok(root) => is_initialized_workspace(&root),
         Err(_) => false,
     }
 }
@@ -733,11 +754,12 @@ fn default_workspace_root() -> String {
 
 fn load_snapshot(root: &Path) -> AppResult<WorkspaceSnapshot> {
     let config = read_or_create_config(root)?;
-    let records = read_records(root)?;
+    let read_result = read_records(root)?;
     Ok(WorkspaceSnapshot {
         config,
-        records,
+        records: read_result.records,
         workspace_path: root.to_string_lossy().to_string(),
+        diagnostics: read_result.diagnostics,
     })
 }
 
@@ -814,8 +836,16 @@ fn create_workspace_dirs(root: &Path) -> AppResult<()> {
     Ok(())
 }
 
+fn is_initialized_workspace(root: &Path) -> bool {
+    root.is_dir() && workspace_config_path(root).is_file()
+}
+
+fn workspace_config_path(root: &Path) -> PathBuf {
+    root.join(".legalbiz").join("config.json")
+}
+
 fn read_or_create_config(root: &Path) -> AppResult<WorkspaceConfig> {
-    let config_path = root.join(".legalbiz").join("config.json");
+    let config_path = workspace_config_path(root);
     if !config_path.exists() {
         write_json(&config_path, &default_config(root))?;
     }
@@ -846,8 +876,9 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> AppResult<()> {
     fs::write(path, raw).map_err(stringify)
 }
 
-fn read_records(root: &Path) -> AppResult<Vec<RecordSummary>> {
+fn read_records(root: &Path) -> AppResult<RecordReadResult> {
     let mut records = Vec::new();
+    let mut diagnostics = Vec::new();
     for entry in WalkDir::new(root)
         .max_depth(6)
         .into_iter()
@@ -859,17 +890,35 @@ fn read_records(root: &Path) -> AppResult<Vec<RecordSummary>> {
                 )
             })
         })
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_type().is_file())
     {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(error) => {
+                if let Some(path) = error.path() {
+                    if is_in_business_root(root, path) {
+                        diagnostics.push(record_diagnostic(
+                            root,
+                            path,
+                            format!("读取工作区文件失败：{}", error),
+                        ));
+                    }
+                }
+                continue;
+            }
+        };
+        if !entry.file_type().is_file() {
+            continue;
+        }
         if entry.path().extension().and_then(|ext| ext.to_str()) != Some("md") {
             continue;
         }
         if entry.file_name() == "README.md" {
             continue;
         }
-        if let Some(record) = parse_markdown_record(root, entry.path()).ok().flatten() {
-            records.push(record);
+        match parse_markdown_record(root, entry.path()) {
+            Ok(Some(record)) => records.push(record),
+            Ok(None) => {}
+            Err(message) => diagnostics.push(record_diagnostic(root, entry.path(), message)),
         }
     }
 
@@ -879,19 +928,33 @@ fn read_records(root: &Path) -> AppResult<Vec<RecordSummary>> {
             .cmp(&left.date)
             .then(left.title.cmp(&right.title))
     });
-    Ok(records)
+    Ok(RecordReadResult {
+        records,
+        diagnostics,
+    })
 }
 
 fn parse_markdown_record(root: &Path, path: &Path) -> AppResult<Option<RecordSummary>> {
     let raw = fs::read_to_string(path).map_err(stringify)?;
     let Some((frontmatter, body)) = split_frontmatter(&raw) else {
+        if is_standard_record_path(root, path) {
+            return Err("缺少或未闭合 YAML frontmatter，记录未被读取。".into());
+        }
         return Ok(None);
     };
     let value: Value = match serde_yaml::from_str(frontmatter) {
         Ok(value) => value,
-        Err(_) => return Ok(None),
+        Err(error) => {
+            if is_standard_record_path(root, path) {
+                return Err(format!("YAML frontmatter 解析失败：{}", error));
+            }
+            return Ok(None);
+        }
     };
     let Some(map) = value.as_object() else {
+        if is_standard_record_path(root, path) {
+            return Err("YAML frontmatter 必须是键值对象，记录未被读取。".into());
+        }
         return Ok(None);
     };
     let fields = map.clone();
@@ -929,6 +992,59 @@ fn parse_markdown_record(root: &Path, path: &Path) -> AppResult<Option<RecordSum
         fields,
         body: Some(body.trim().to_string()),
     }))
+}
+
+fn record_diagnostic(root: &Path, path: &Path, message: impl Into<String>) -> WorkspaceDiagnostic {
+    WorkspaceDiagnostic {
+        severity: "warning".into(),
+        message: message.into(),
+        path: Some(relative_path(root, path)),
+    }
+}
+
+fn relative_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .to_string()
+}
+
+fn relative_segments(root: &Path, path: &Path) -> Vec<String> {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .components()
+        .filter_map(|part| part.as_os_str().to_str().map(String::from))
+        .collect()
+}
+
+fn is_in_business_root(root: &Path, path: &Path) -> bool {
+    matches!(
+        relative_segments(root, path).first().map(String::as_str),
+        Some("clients")
+            | Some("contracts")
+            | Some("matters")
+            | Some("conflict-checks")
+            | Some("invoices")
+            | Some("calendar")
+    )
+}
+
+fn is_standard_record_path(root: &Path, path: &Path) -> bool {
+    let segments = relative_segments(root, path);
+    match segments.as_slice() {
+        [root_dir, _, file] if root_dir == "clients" || root_dir == "contracts" => {
+            file == "index.md"
+        }
+        [root_dir, _, _, file] if root_dir == "matters" => file == "index.md",
+        [root_dir, _, file]
+            if root_dir == "conflict-checks"
+                || root_dir == "invoices"
+                || root_dir == "calendar" =>
+        {
+            file.ends_with(".md")
+        }
+        _ => false,
+    }
 }
 
 fn split_frontmatter(raw: &str) -> Option<(&str, &str)> {

@@ -1,4 +1,4 @@
-import { FolderOpen, LayoutDashboard, Plus, RefreshCw, Settings2, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, FolderOpen, LayoutDashboard, Plus, RefreshCw, Settings2, Sparkles, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { ENCOURAGEMENTS } from './encouragements'
@@ -25,6 +25,7 @@ import {
   seedDemoRecords,
 } from './storage'
 import { currentMonth, emptyRecords, moduleIcons } from './shared/constants'
+import type { RelationTarget } from './shared/relations'
 import { friendlyError } from './shared/utils'
 import BrandLogo from './components/BrandLogo'
 import NavButton from './components/NavButton'
@@ -33,12 +34,15 @@ import Dashboard from './components/Dashboard'
 import ModulePanel from './components/ModulePanel'
 import SettingsPage from './components/settings/SettingsPage'
 
+type FieldFiltersByModule = Partial<Record<ModuleKey, Record<string, string>>>
+
 function App() {
   const [workspacePath, setWorkspacePath] = useState('')
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null)
   const [active, setActive] = useState<ModuleKey | 'dashboard' | 'settings'>('dashboard')
   const [month, setMonth] = useState(currentMonth)
   const [query, setQuery] = useState('')
+  const [fieldFilters, setFieldFilters] = useState<FieldFiltersByModule>({})
   const [status, setStatus] = useState(
     isTauri()
       ? '点击下方"浏览"按钮选择本地文件夹，或从最近工作区中打开。'
@@ -55,6 +59,7 @@ function App() {
 
   const config = snapshot?.config ?? defaultConfig()
   const records = snapshot?.records ?? emptyRecords
+  const diagnostics = snapshot?.diagnostics ?? []
 
   const refreshRecents = useCallback(() => {
     setRecents(getRecentWorkspacesSync())
@@ -68,15 +73,54 @@ function App() {
 
   const filteredRecords = useMemo(() => {
     if (active === 'dashboard' || active === 'settings') return records
+    const definition = config.modules[active]
+    const activeFieldFilters = fieldFilters[active] ?? {}
+    const filterableFields = definition.fields.filter((field) => field.filterable)
+
     return records.filter((record) => {
       const matchesModule = record.module === active
       const haystack = JSON.stringify(record).toLowerCase()
       const matchesQuery = !query || haystack.includes(query.toLowerCase())
       const matchesMonth =
         active === 'client' || active === 'conflict_check' || !month || record.date?.startsWith(month)
-      return matchesModule && matchesQuery && matchesMonth
+      const matchesFieldFilters = filterableFields.every((field) => {
+        const filterValue = activeFieldFilters[field.key]?.trim()
+        if (!filterValue) return true
+
+        const recordValue = record.fields[field.key]
+        if (field.type === 'boolean') {
+          const valueText = String(recordValue ?? '').toLowerCase()
+          if (filterValue === 'true') return recordValue === true || valueText === 'true' || valueText === '是'
+          return (
+            recordValue === false ||
+            recordValue == null ||
+            valueText === '' ||
+            valueText === 'false' ||
+            valueText === '否'
+          )
+        }
+        if (field.type === 'single_select') return String(recordValue ?? '') === filterValue
+
+        return String(recordValue ?? '').toLowerCase().includes(filterValue.toLowerCase())
+      })
+
+      return matchesModule && matchesQuery && matchesMonth && matchesFieldFilters
     })
-  }, [active, month, query, records])
+  }, [active, config, fieldFilters, month, query, records])
+
+  const handleFieldFilter = useCallback((fieldKey: string, value: string) => {
+    if (active === 'dashboard' || active === 'settings') return
+    setFieldFilters((prev) => {
+      const current = prev[active] ?? {}
+      const nextForModule = { ...current }
+      if (value) {
+        nextForModule[fieldKey] = value
+      } else {
+        delete nextForModule[fieldKey]
+      }
+      return { ...prev, [active]: nextForModule }
+    })
+  }, [active])
 
   const handleCreate = useCallback(
     async (rawPath?: string) => {
@@ -190,6 +234,14 @@ function App() {
   const goToAiSettings = useCallback(() => {
     setActive('settings')
     setSettingsTab('ai')
+  }, [])
+
+  const openReference = useCallback((target: RelationTarget) => {
+    setActive(target.module)
+    setQuery(target.query)
+    setMonth('')
+    setFieldFilters((prev) => ({ ...prev, [target.module]: {} }))
+    setStatus(`已打开关联记录：${target.label}`)
   }, [])
 
   // 启动恢复
@@ -344,10 +396,34 @@ function App() {
           </div>
         </header>
 
+        {diagnostics.length > 0 ? (
+          <section className="diagnostic-banner" aria-live="polite">
+            <div>
+              <AlertTriangle size={16} />
+              <strong>有 {diagnostics.length} 个 Markdown 记录未能读取</strong>
+            </div>
+            <ul>
+              {diagnostics.slice(0, 3).map((item, index) => (
+                <li key={`${item.path ?? 'workspace'}-${index}`}>
+                  {item.path ? `${item.path}：` : ''}
+                  {item.message}
+                </li>
+              ))}
+            </ul>
+            {diagnostics.length > 3 ? <p>还有 {diagnostics.length - 3} 个问题，请修复后点击“重读 MD”。</p> : null}
+          </section>
+        ) : null}
+
         {!snapshot && active !== 'settings' ? (
           <Onboarding onCreate={() => handleCreate()} onOpen={() => handleOpen()} onDemo={handleSeedDemo} />
         ) : active === 'dashboard' ? (
-          <Dashboard records={records} setActive={setActive} onSeedDemo={handleSeedDemo} />
+          <Dashboard
+            records={records}
+            setActive={setActive}
+            onSeedDemo={handleSeedDemo}
+            month={month}
+            setMonth={setMonth}
+          />
         ) : active === 'settings' ? (
           <SettingsPage
             tab={settingsTab}
@@ -376,10 +452,13 @@ function App() {
             setMonth={setMonth}
             query={query}
             setQuery={setQuery}
+            fieldFilters={fieldFilters[active] ?? {}}
+            onFieldFilter={handleFieldFilter}
             onSnapshot={handleSnapshotResult}
             setStatus={setStatus}
             aiSettings={aiSettings}
             onConfigureAi={goToAiSettings}
+            onOpenReference={openReference}
           />
         )}
       </section>
