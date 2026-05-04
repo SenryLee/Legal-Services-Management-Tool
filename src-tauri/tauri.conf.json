@@ -29,6 +29,9 @@
     "targets": ["dmg", "msi", "nsis"],
     "category": "Business",
     "shortDescription": "本地 Markdown 法律业务管理系统",
-    "longDescription": "客户、合同、诉讼、非诉、开票、日历和利益冲突检查均保存在本地 Markdown 工作区。"
+    "longDescription": "客户、合同、诉讼、非诉、开票、日历和利益冲突检查均保存在本地 Markdown 工作区。",
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }
