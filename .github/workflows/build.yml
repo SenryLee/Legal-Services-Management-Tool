@@ -46,7 +46,7 @@ jobs:
           workspaces: src-tauri
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
@@ -57,7 +57,48 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: '法律人业务管理系统 ${{ github.ref_name }}'
-          releaseBody: '详见下方 Assets 下载对应平台的安装包。'
+          releaseBody: ''
           releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}
+
+  release-notes:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    name: Update release notes
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate and update release notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get auto-generated notes from GitHub
+          NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+            -f tag_name=${{ github.ref_name }} \
+            --jq '.body')
+
+          # Append install instructions
+          FULL_BODY=$(cat <<'MDEOF'
+          $NOTES
+
+          ---
+
+          ## 安装说明
+
+          **macOS (Apple Silicon)**
+          1. 下载 `.app.tar.gz`，解压后将 `.app` 拖入"应用程序"。
+          2. 首次打开如提示"未识别开发者"，在「系统设置 → 隐私与安全性」中允许打开。
+
+          **Windows**
+          1. 下载 `_x64-setup.exe` 或 `.msi`，双击安装即可。
+          MDEOF
+          )
+
+          # Update the release body
+          gh release edit "${{ github.ref_name }}" \
+            --repo "${{ github.repository }}" \
+            --notes "$FULL_BODY"
