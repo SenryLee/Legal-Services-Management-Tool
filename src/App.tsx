@@ -461,6 +461,7 @@ function App() {
             onSnapshot={handleSnapshotResult}
             setStatus={setStatus}
             onConfigureAi={goToAiSettings}
+            onNavigate={setActive}
           />
         ) : (
           <ModulePanel

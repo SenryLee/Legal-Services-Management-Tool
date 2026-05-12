@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { listen } from '@tauri-apps/api/event'
 import { isTauri, isAiReady } from '../storage'
 import { importFilesByPath, importFiles, listPending, runPipeline, confirmCreate, confirmAttach, skipEntry, clearAll, mergeInboxEntries } from '../inbox'
-import type { AISettings, InboxEntry, RecordSummary, WorkspaceConfig, WorkspaceSnapshot } from '../domain'
+import { MODULE_ORDER, type AISettings, type FieldDefinition, type InboxEntry, type ModuleKey, type RecordSummary, type WorkspaceConfig, type WorkspaceSnapshot } from '../domain'
 
 export default function InboxPanel({
   workspacePath,
@@ -12,6 +12,7 @@ export default function InboxPanel({
   onSnapshot,
   setStatus,
   onConfigureAi,
+  onNavigate,
 }: {
   workspacePath: string
   records: RecordSummary[]
@@ -20,6 +21,7 @@ export default function InboxPanel({
   onSnapshot: (snap: WorkspaceSnapshot) => void
   setStatus: (msg: string) => void
   onConfigureAi: () => void
+  onNavigate: (module: ModuleKey) => void
 }) {
   const [entries, setEntries] = useState<InboxEntry[]>([])
   const [busy, setBusy] = useState(false)
@@ -156,28 +158,27 @@ export default function InboxPanel({
   )
 
   const handleConfirmCreate = useCallback(
-    async (entry: InboxEntry) => {
-      if (!entry.pipeline) return
-      const { suggest } = entry.pipeline
+    async (entry: InboxEntry, targetModule: ModuleKey, fields: Record<string, string>, body: string) => {
       setBusy(true)
       try {
         const snap = await confirmCreate(
           workspacePath,
           entry.id,
-          suggest.targetModule,
-          suggest.suggestedFields,
-          suggest.suggestedBody,
+          targetModule,
+          fields,
+          body,
         )
         onSnapshot(snap)
         setEntries((prev) => prev.filter((e) => e.id !== entry.id))
-        setStatus('已创建新记录。')
+        onNavigate(targetModule)
+        setStatus(`已保存到「${config.modules[targetModule]?.label ?? targetModule}」。`)
       } catch (err) {
         setStatus(`创建失败：${String(err)}`)
       } finally {
         setBusy(false)
       }
     },
-    [workspacePath, onSnapshot, setStatus],
+    [workspacePath, onSnapshot, onNavigate, config.modules, setStatus],
   )
 
   const handleConfirmAttach = useCallback(
@@ -273,6 +274,7 @@ export default function InboxPanel({
             <InboxEntryCard
               key={entry.id}
               entry={entry}
+              config={config}
               busy={busy}
               analyzing={analyzing === entry.id}
               onAnalyze={handleAnalyze}
@@ -289,6 +291,7 @@ export default function InboxPanel({
 
 function InboxEntryCard({
   entry,
+  config,
   busy,
   analyzing,
   onAnalyze,
@@ -297,14 +300,46 @@ function InboxEntryCard({
   onSkip,
 }: {
   entry: InboxEntry
+  config: WorkspaceConfig
   busy: boolean
   analyzing: boolean
   onAnalyze: (entry: InboxEntry) => void
-  onConfirmCreate: (entry: InboxEntry) => void
+  onConfirmCreate: (entry: InboxEntry, targetModule: ModuleKey, fields: Record<string, string>, body: string) => void
   onConfirmAttach: (entry: InboxEntry) => void
   onSkip: (entry: InboxEntry) => void
 }) {
   const pipeline = entry.pipeline
+  const initialModule = pipeline?.suggest.targetModule ?? 'non_litigation'
+  const [targetModule, setTargetModule] = useState<ModuleKey>(initialModule)
+  const [fieldDraft, setFieldDraft] = useState<Record<string, string>>(pipeline?.suggest.suggestedFields ?? {})
+  const [bodyDraft, setBodyDraft] = useState(pipeline?.suggest.suggestedBody ?? '')
+
+  useEffect(() => {
+    if (!pipeline) return
+    setTargetModule(pipeline.suggest.targetModule)
+    setFieldDraft(pipeline.suggest.suggestedFields)
+    setBodyDraft(pipeline.suggest.suggestedBody ?? '')
+  }, [entry.id, pipeline])
+
+  const module = config.modules[targetModule]
+  const moduleFields = module?.fields ?? []
+  const updateField = (key: string, value: string) => {
+    setFieldDraft((prev) => ({ ...prev, [key]: value }))
+  }
+  const buildCreateFields = (): Record<string, string> => {
+    const allowedKeys = moduleFields.map((field) => field.key)
+    const keys = allowedKeys.length > 0 ? allowedKeys : Object.keys(fieldDraft)
+    const next: Record<string, string> = {}
+    for (const key of keys) {
+      const value = (fieldDraft[key] ?? '').trim()
+      if (value) next[key] = value
+    }
+    const titleField = moduleFields.find((field) => field.key === 'title' || field.key === 'name')
+    if (titleField && !next[titleField.key]) {
+      next[titleField.key] = entry.sourceFile.originalName.replace(/\.[^.]+$/, '')
+    }
+    return next
+  }
 
   return (
     <div
@@ -377,25 +412,57 @@ function InboxEntryCard({
                 </div>
               </details>
             )}
+            <div style={{ marginTop: '0.75rem', display: 'grid', gap: '0.75rem' }}>
+              <label style={{ display: 'grid', gap: 4 }}>
+                <span style={{ fontSize: 12, color: '#6f675b' }}>保存到板块</span>
+                <select
+                  value={targetModule}
+                  onChange={(event) => setTargetModule(event.target.value as ModuleKey)}
+                >
+                  {MODULE_ORDER.map((key) => (
+                    <option key={key} value={key}>
+                      {config.modules[key]?.label ?? key}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div style={{ display: 'grid', gap: '0.5rem' }}>
+                {moduleFields.map((field) => (
+                  <InboxFieldEditor
+                    key={field.key}
+                    field={field}
+                    value={fieldDraft[field.key] ?? ''}
+                    onChange={(value) => updateField(field.key, value)}
+                  />
+                ))}
+              </div>
+              <label style={{ display: 'grid', gap: 4 }}>
+                <span style={{ fontSize: 12, color: '#6f675b' }}>正文备注</span>
+                <textarea
+                  value={bodyDraft}
+                  onChange={(event) => setBodyDraft(event.target.value)}
+                  rows={3}
+                  placeholder="可补充这份文件的处理说明、来源或下一步事项。"
+                />
+              </label>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-            {pipeline.suggest.action === 'attach_to_existing' && pipeline.match.existingRecord ? (
+            <button
+              type="button"
+              className="primary"
+              onClick={() => onConfirmCreate(entry, targetModule, buildCreateFields(), bodyDraft)}
+              disabled={busy}
+            >
+              保存到{module?.label ?? targetModule}
+            </button>
+            {pipeline.suggest.action === 'attach_to_existing' && pipeline.match.existingRecord && (
               <button
                 type="button"
-                className="primary"
                 onClick={() => onConfirmAttach(entry)}
                 disabled={busy}
               >
-                关联记录
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="primary"
-                onClick={() => onConfirmCreate(entry)}
-                disabled={busy}
-              >
-                创建记录
+                仅关联附件
               </button>
             )}
             <button type="button" onClick={() => onAnalyze(entry)} disabled={busy || analyzing}>
@@ -408,5 +475,50 @@ function InboxEntryCard({
         </div>
       )}
     </div>
+  )
+}
+
+function InboxFieldEditor({
+  field,
+  value,
+  onChange,
+}: {
+  field: FieldDefinition
+  value: string
+  onChange: (value: string) => void
+}) {
+  const label = `${field.label}${field.required ? ' *' : ''}`
+  if (field.options?.length) {
+    return (
+      <label style={{ display: 'grid', gap: 4 }}>
+        <span style={{ fontSize: 12, color: '#6f675b' }}>{label}</span>
+        <select value={value} onChange={(event) => onChange(event.target.value)}>
+          <option value="">未填写</option>
+          {field.options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      </label>
+    )
+  }
+  if (field.type === 'long_text') {
+    return (
+      <label style={{ display: 'grid', gap: 4 }}>
+        <span style={{ fontSize: 12, color: '#6f675b' }}>{label}</span>
+        <textarea value={value} onChange={(event) => onChange(event.target.value)} rows={2} />
+      </label>
+    )
+  }
+  return (
+    <label style={{ display: 'grid', gap: 4 }}>
+      <span style={{ fontSize: 12, color: '#6f675b' }}>{label}</span>
+      <input
+        type={field.type === 'number' || field.type === 'money' ? 'number' : field.type === 'date' ? 'date' : 'text'}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
   )
 }

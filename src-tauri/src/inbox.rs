@@ -739,3 +739,72 @@ pub fn inbox_update_status(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::Engine;
+    use serde_json::json;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_workspace() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "legalbiz-inbox-test-{}-{}",
+            std::process::id(),
+            nanos
+        ))
+    }
+
+    #[test]
+    fn confirm_create_writes_record_to_target_module_and_processes_entry() {
+        let root = temp_workspace();
+        crate::workspace::create_workspace_dirs(&root).expect("create workspace dirs");
+        let workspace_path = root.to_string_lossy().to_string();
+        let file_bytes = "案号：(2026)沪0105民初1234号\n法院：上海市长宁区人民法院".as_bytes();
+        let entry = inbox_import_from_bytes(
+            workspace_path.clone(),
+            "起诉状.txt".into(),
+            "text/plain".into(),
+            base64::engine::general_purpose::STANDARD.encode(file_bytes),
+        )
+        .expect("import inbox file");
+        let processed_month = entry.created_at.chars().take(7).collect::<String>();
+        let mut fields = Map::new();
+        fields.insert("title".into(), json!("岚山科技诉北辰贸易服务合同纠纷"));
+        fields.insert("case_number".into(), json!("(2026)沪0105民初1234号"));
+        fields.insert("opened_at".into(), json!("2026-05-12"));
+
+        let snapshot = inbox_confirm_create(
+            workspace_path,
+            entry.id.clone(),
+            "litigation".into(),
+            fields,
+            "由智能收件箱确认创建。".into(),
+        )
+        .expect("confirm create");
+
+        let record = snapshot
+            .records
+            .iter()
+            .find(|record| {
+                record.module == "litigation"
+                    && record.title == "岚山科技诉北辰贸易服务合同纠纷"
+            })
+            .expect("created litigation record appears in snapshot");
+        let record_path = root.join(record.path.as_ref().expect("record path"));
+        assert!(record_path.is_file());
+        assert!(record_path.parent().unwrap().join("attachments").join("起诉状.txt").is_file());
+        assert!(!root.join("inbox/pending").join(format!("{}.json", entry.id)).exists());
+        assert!(root
+            .join("inbox/processed")
+            .join(processed_month)
+            .join(format!("{}.json", entry.id))
+            .is_file());
+
+        let _ = fs::remove_dir_all(root);
+    }
+}

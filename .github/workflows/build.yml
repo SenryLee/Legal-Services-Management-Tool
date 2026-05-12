@@ -94,10 +94,23 @@ jobs:
           path: release-assets
           merge-multiple: true
 
+      - name: Normalize release asset names
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p release-assets-normalized
+          dmg="$(find release-assets -type f -name '*.dmg' -print -quit)"
+          exe="$(find release-assets -type f -name '*.exe' -print -quit)"
+          test -n "$dmg"
+          test -n "$exe"
+          cp "$dmg" "release-assets-normalized/LegalBiz_${version}_macos_aarch64.dmg"
+          cp "$exe" "release-assets-normalized/LegalBiz_${version}_windows_x64-setup.exe"
+
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/**/*
+          files: release-assets-normalized/*
           fail_on_unmatched_files: true
           body: |
             ## 安装说明
