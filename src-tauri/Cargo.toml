@@ -1,6 +1,6 @@
 [package]
 name = "legalbiz-local"
-version = "0.1.1"
+version = "0.1.2"
 description = "本地 Markdown 法律业务管理系统"
 authors = ["LegalBiz Local"]
 edition = "2021"
