@@ -6,8 +6,8 @@ use std::path::{Component, Path, PathBuf};
 use walkdir::WalkDir;
 
 use crate::{
-    config, AppResult, RecordReadResult, RecordSummary, WorkspaceConfig,
-    WorkspaceDiagnostic, WorkspaceSnapshot,
+    config, AppResult, RecordReadResult, RecordSummary, WorkspaceConfig, WorkspaceDiagnostic,
+    WorkspaceSnapshot,
 };
 
 pub fn load_snapshot(root: &Path) -> AppResult<WorkspaceSnapshot> {
@@ -443,8 +443,6 @@ fn infer_module_from_path(path: &Path) -> String {
         "invoice"
     } else if segments.iter().any(|s| s == "calendar") {
         "calendar_event"
-    } else if segments.iter().any(|s| s == "matters") {
-        "litigation"
     } else {
         "litigation"
     }

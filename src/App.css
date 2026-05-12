@@ -1947,3 +1947,179 @@ button.icon-btn.danger:hover {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* ---------- Litigation case organizer ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(25, 22, 17, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.case-organizer {
+  width: min(1040px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+  overflow: auto;
+  background: #fffdf7;
+  border: 1px solid #d8cdbb;
+  border-radius: 8px;
+  box-shadow: 0 28px 80px rgba(41, 31, 20, 0.28);
+}
+
+.case-organizer-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e4dac9;
+  background: #fffaf0;
+}
+
+.case-organizer-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.case-organizer-header p {
+  margin: 4px 0 0;
+  color: #796c59;
+}
+
+.case-organizer-toolbar,
+.case-organizer-section {
+  padding: 14px 20px;
+}
+
+.case-organizer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.case-intake-banner {
+  margin: 0 20px 12px;
+  padding: 12px 14px;
+  border: 1px solid #d9decf;
+  border-radius: 8px;
+  background: #f7faef;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.case-intake-banner.active {
+  border-color: #e0b8aa;
+  background: #fff2ec;
+  color: #8a2d18;
+}
+
+.case-intake-banner div,
+.case-file-row span,
+.case-action-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.case-intake-banner small,
+.case-file-row small,
+.case-action-row small,
+.case-report small,
+.case-result-row small {
+  color: #857866;
+  font-size: 12px;
+}
+
+.case-organizer-section {
+  border-top: 1px solid #eee5d6;
+}
+
+.case-organizer-section h3 {
+  margin: 0 0 10px;
+}
+
+.case-file-list,
+.case-action-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.case-file-row,
+.case-action-row,
+.case-result-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e3d8c7;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.case-file-row input,
+.case-action-row input {
+  margin-top: 3px;
+}
+
+.case-file-row em,
+.case-report em {
+  color: #a33b20;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.case-report-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.case-report {
+  border: 1px solid #e3d8c7;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.case-report.warning-report {
+  border-color: #e3ad9a;
+  background: #fff7f3;
+}
+
+.case-report p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.case-report code,
+.case-action-row code {
+  word-break: break-all;
+  white-space: normal;
+}
+
+.case-result-row {
+  flex-direction: column;
+}
+
+.case-result-row.ok strong {
+  color: #2d6b35;
+}
+
+.case-result-row.error strong {
+  color: #a33b20;
+}

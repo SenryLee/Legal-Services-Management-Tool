@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileSpreadsheet, Paperclip, Pencil, Plus, Save, Search, ShieldCheck, X } from 'lucide-react'
+import { FileSpreadsheet, FolderKanban, Paperclip, Pencil, Plus, Save, Search, ShieldCheck, X } from 'lucide-react'
 import type { AISettings, FieldDefinition, ModuleKey, RecordSummary, WorkspaceSnapshot } from '../domain'
 import { emptyRecordFor } from '../domain'
-import { createRecord, exportRowsToCsv, generateLedgerSnapshot, updateRecord } from '../storage'
+import { createRecord, exportRowsToCsv, generateLedgerSnapshot, openWorkspace, updateRecord } from '../storage'
 import {
   buildRelationIndex,
   relationPatchForField,
@@ -15,6 +15,7 @@ import AiAssistant from './AiAssistant'
 import ConflictAnalyzer from './ConflictAnalyzer'
 import DynamicForm from './DynamicForm'
 import AttachmentDrawer from './AttachmentDrawer'
+import LitigationCaseOrganizer from './LitigationCaseOrganizer'
 import WordStatsAutofill from './WordStatsAutofill'
 
 export default function ModulePanel({
@@ -55,6 +56,7 @@ export default function ModulePanel({
   const [body, setBody] = useState('')
   const [editingRecord, setEditingRecord] = useState<RecordSummary | null>(null)
   const [attachmentRecord, setAttachmentRecord] = useState<RecordSummary | null>(null)
+  const [organizerRecord, setOrganizerRecord] = useState<RecordSummary | null>(null)
 
   const relationIndex = useMemo(() => buildRelationIndex(allRecords), [allRecords])
   const ledgerFields = definition.fields.filter((field) => field.ledger).slice(0, 8)
@@ -280,6 +282,17 @@ export default function ModulePanel({
                       >
                         <Paperclip size={13} />
                       </button>
+                      {moduleKey === 'litigation' ? (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="案件文件整理"
+                          onClick={() => setOrganizerRecord(record)}
+                          disabled={!record.path}
+                        >
+                          <FolderKanban size={13} />
+                        </button>
+                      ) : null}
                     </td>
                   </tr>
                 ))
@@ -363,6 +376,18 @@ export default function ModulePanel({
           workspacePath={snapshot.workspacePath}
           record={attachmentRecord}
           onClose={() => setAttachmentRecord(null)}
+          setStatus={setStatus}
+        />
+      ) : null}
+      {organizerRecord ? (
+        <LitigationCaseOrganizer
+          workspacePath={snapshot.workspacePath}
+          record={organizerRecord}
+          onClose={() => setOrganizerRecord(null)}
+          onAfterExecute={async () => {
+            const refreshed = await openWorkspace(snapshot.workspacePath)
+            onSnapshot(refreshed)
+          }}
           setStatus={setStatus}
         />
       ) : null}

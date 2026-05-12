@@ -112,7 +112,7 @@ pub async fn ai_chat(settings: AiSettings, messages: Vec<ChatMessage>) -> AppRes
         return Err("尚未配置 API Key（去设置 → AI 配置）".into());
     }
 
-    let timeout = settings.timeout_seconds.unwrap_or(60).max(5).min(600) as u64;
+    let timeout = settings.timeout_seconds.unwrap_or(60).clamp(5, 600) as u64;
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(timeout))
         .build()

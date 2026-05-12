@@ -121,11 +121,7 @@ fn next_inbox_id(root: &Path) -> String {
 }
 
 fn guess_mime_type(name: &str) -> String {
-    let ext = name
-        .rsplit('.')
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
+    let ext = name.rsplit('.').next().unwrap_or("").to_lowercase();
     match ext.as_str() {
         "pdf" => "application/pdf",
         "doc" => "application/msword",
@@ -397,9 +393,8 @@ pub fn inbox_confirm_create(
 
     // 4. Mark as confirmed and move to processed
     entry.user_decision = "confirmed".to_string();
-    let processed_month_dir = processed_dir(&root).join(
-        entry.created_at.chars().take(7).collect::<String>(),
-    );
+    let processed_month_dir =
+        processed_dir(&root).join(entry.created_at.chars().take(7).collect::<String>());
     fs::create_dir_all(&processed_month_dir).map_err(stringify)?;
     let processed_path = processed_month_dir.join(format!("{}.json", entry.id));
     write_json(&processed_path, &entry)?;
@@ -455,9 +450,8 @@ pub fn inbox_confirm_attach(
 
     // 4. Mark as confirmed and move to processed
     entry.user_decision = "confirmed".to_string();
-    let processed_month_dir = processed_dir(&root).join(
-        entry.created_at.chars().take(7).collect::<String>(),
-    );
+    let processed_month_dir =
+        processed_dir(&root).join(entry.created_at.chars().take(7).collect::<String>());
     fs::create_dir_all(&processed_month_dir).map_err(stringify)?;
     let processed_path = processed_month_dir.join(format!("{}.json", entry.id));
     write_json(&processed_path, &entry)?;
@@ -481,9 +475,8 @@ pub fn inbox_skip(workspace_path: String, inbox_id: String) -> AppResult<()> {
 
     entry.user_decision = "skipped".to_string();
 
-    let processed_month_dir = processed_dir(&root).join(
-        entry.created_at.chars().take(7).collect::<String>(),
-    );
+    let processed_month_dir =
+        processed_dir(&root).join(entry.created_at.chars().take(7).collect::<String>());
     fs::create_dir_all(&processed_month_dir).map_err(stringify)?;
     let processed_path = processed_month_dir.join(format!("{}.json", entry.id));
     write_json(&processed_path, &entry)?;
@@ -494,10 +487,7 @@ pub fn inbox_skip(workspace_path: String, inbox_id: String) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn inbox_list_processed(
-    workspace_path: String,
-    month: String,
-) -> AppResult<Vec<InboxEntry>> {
+pub fn inbox_list_processed(workspace_path: String, month: String) -> AppResult<Vec<InboxEntry>> {
     let root = normalize_workspace_path_public(&workspace_path)?;
     let dir = processed_dir(&root).join(&month);
     Ok(read_entries_from_dir(&dir))
@@ -791,14 +781,27 @@ mod tests {
             .records
             .iter()
             .find(|record| {
-                record.module == "litigation"
-                    && record.title == "岚山科技诉北辰贸易服务合同纠纷"
+                record.module == "litigation" && record.title == "岚山科技诉北辰贸易服务合同纠纷"
             })
             .expect("created litigation record appears in snapshot");
         let record_path = root.join(record.path.as_ref().expect("record path"));
         assert!(record_path.is_file());
-        assert!(record_path.parent().unwrap().join("attachments").join("起诉状.txt").is_file());
-        assert!(!root.join("inbox/pending").join(format!("{}.json", entry.id)).exists());
+        assert!(record_path
+            .parent()
+            .unwrap()
+            .join("06待办与期限")
+            .join("待整理清单.md")
+            .is_file());
+        assert!(record_path
+            .parent()
+            .unwrap()
+            .join("attachments")
+            .join("起诉状.txt")
+            .is_file());
+        assert!(!root
+            .join("inbox/pending")
+            .join(format!("{}.json", entry.id))
+            .exists());
         assert!(root
             .join("inbox/processed")
             .join(processed_month)

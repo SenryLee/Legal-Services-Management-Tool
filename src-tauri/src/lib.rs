@@ -10,17 +10,20 @@ mod attachments;
 mod config;
 mod demo;
 mod inbox;
+mod litigation_organizer;
 mod workspace;
 
 use workspace::{
-    create_workspace_dirs, escape_table, is_initialized_workspace, load_snapshot,
-    next_record_id, normalize_workspace_path, record_path, record_year, render_markdown,
-    safe_join_relative, split_frontmatter, stringify, title_from_fields, value_to_string,
-    workspace_config_path, write_json,
+    create_workspace_dirs, escape_table, is_initialized_workspace, load_snapshot, next_record_id,
+    normalize_workspace_path, record_path, record_year, render_markdown, safe_join_relative,
+    split_frontmatter, stringify, title_from_fields, value_to_string, workspace_config_path,
+    write_json,
 };
 
 /// 给子模块用的 path 规范化函数
-pub(crate) fn normalize_workspace_path_public(workspace_path: &str) -> Result<std::path::PathBuf, String> {
+pub(crate) fn normalize_workspace_path_public(
+    workspace_path: &str,
+) -> Result<std::path::PathBuf, String> {
     normalize_workspace_path(workspace_path)
 }
 
@@ -137,16 +140,15 @@ struct ConflictHit {
 
 #[tauri::command]
 fn load_app_state(app: tauri::AppHandle) -> AppState {
-    match app_state_path(&app).and_then(|path| {
-        if !path.exists() {
-            return Ok(AppState::default());
-        }
-        let raw = fs::read_to_string(&path).map_err(stringify)?;
-        serde_json::from_str::<AppState>(&raw).map_err(stringify)
-    }) {
-        Ok(state) => state,
-        Err(_) => AppState::default(),
-    }
+    app_state_path(&app)
+        .and_then(|path| {
+            if !path.exists() {
+                return Ok(AppState::default());
+            }
+            let raw = fs::read_to_string(&path).map_err(stringify)?;
+            serde_json::from_str::<AppState>(&raw).map_err(stringify)
+        })
+        .unwrap_or_default()
 }
 
 #[tauri::command]
@@ -236,6 +238,9 @@ pub(crate) fn create_record_internal(
     let target = record_path(root, module_key, &year, &id)?;
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(stringify)?;
+        if module_key == "litigation" {
+            litigation_organizer::ensure_litigation_case_skeleton(parent, &fields)?;
+        }
         if module_key == "litigation" || module_key == "non_litigation" {
             fs::create_dir_all(parent.join("notes")).map_err(stringify)?;
             fs::create_dir_all(parent.join("attachments")).map_err(stringify)?;
@@ -243,7 +248,12 @@ pub(crate) fn create_record_internal(
         }
     }
 
-    let markdown = render_markdown(&fields, &body)?;
+    let markdown_body = if module_key == "litigation" {
+        litigation_organizer::render_litigation_index_body(&fields, &body)
+    } else {
+        body
+    };
+    let markdown = render_markdown(&fields, &markdown_body)?;
     fs::write(&target, markdown).map_err(stringify)?;
     create_linked_litigation_calendar_events(root, module_key, &id, &fields)?;
     Ok((target, id))
@@ -528,6 +538,10 @@ pub fn run() {
             save_config,
             create_record,
             update_record,
+            litigation_organizer::scan_litigation_case,
+            litigation_organizer::read_litigation_case_file,
+            litigation_organizer::propose_litigation_case_plan,
+            litigation_organizer::execute_litigation_case_actions,
             run_conflict_check,
             generate_ledger_snapshot,
             workspace_exists,

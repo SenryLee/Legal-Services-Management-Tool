@@ -173,6 +173,96 @@ export interface ChatResult {
   latencyMs: number
 }
 
+export interface CasePendingFile {
+  relativePath: string
+  currentName: string
+  extension: string
+  size: number
+  modified: number
+  status: 'new' | 'changed' | string
+  suspectedWrongCase: boolean
+  reason: string
+}
+
+export interface LitigationCaseScan {
+  caseRoot: string
+  caseRootRelative: string
+  pendingFiles: CasePendingFile[]
+  lastScannedAt: string
+  hasPending: boolean
+}
+
+export interface CaseIndexUpdate {
+  fieldKey: string
+  label: string
+  value: string
+}
+
+export interface CaseDeadlineSuggestion {
+  title: string
+  date: string
+  basis: string
+}
+
+export interface CaseAnalysisReport {
+  filePath: string
+  currentName: string
+  documentType: string
+  stage: string
+  suggestedDirectory: string
+  suggestedFilename: string
+  suggestedTags: string[]
+  suggestedIndexUpdates: CaseIndexUpdate[]
+  suggestedTodos: string[]
+  suggestedDeadlines: CaseDeadlineSuggestion[]
+  wrongCaseSuspected: boolean
+  reasoningExcerpt: string
+  deepAnalyzed: boolean
+}
+
+export interface CaseAction {
+  id: string
+  kind:
+    | 'create_directory'
+    | 'rename_file'
+    | 'move_file'
+    | 'update_index'
+    | 'update_todo'
+    | 'update_deadline'
+    | 'write_ai_summary'
+    | string
+  title: string
+  description: string
+  sourcePath?: string | null
+  targetPath?: string | null
+  content?: string | null
+}
+
+export interface LitigationCasePlan {
+  caseRoot: string
+  caseRootRelative: string
+  reports: CaseAnalysisReport[]
+  actions: CaseAction[]
+  notes: string[]
+}
+
+export interface CaseActionResult {
+  actionId: string
+  ok: boolean
+  message: string
+}
+
+export interface LitigationCaseExecutionResult {
+  caseRoot: string
+  results: CaseActionResult[]
+  logPath: string
+  snapshot: Array<{
+    path: string
+    size: number
+    modified: number
+  }>
+}
+
 export interface InboxSourceFile {
   originalName: string
   storedPath: string
