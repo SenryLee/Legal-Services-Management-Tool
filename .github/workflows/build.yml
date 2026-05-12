@@ -94,7 +94,8 @@ jobs:
       - name: Create or update release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-assets/*
+          files: release-assets/**/*
+          fail_on_unmatched_files: true
           body: |
             ## 安装说明
 
