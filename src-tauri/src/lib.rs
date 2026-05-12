@@ -2,13 +2,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
 
 mod ai;
 mod attachments;
 mod config;
 mod demo;
+mod inbox;
 mod workspace;
 
 use workspace::{
@@ -210,19 +211,29 @@ fn save_config(workspace_path: String, config: WorkspaceConfig) -> AppResult<Wor
 fn create_record(
     workspace_path: String,
     module_key: String,
-    mut fields: Map<String, Value>,
+    fields: Map<String, Value>,
     body: String,
 ) -> AppResult<WorkspaceSnapshot> {
     let root = normalize_workspace_path(&workspace_path)?;
+    create_record_internal(&root, &module_key, fields, body)?;
+    load_snapshot(&root)
+}
+
+pub(crate) fn create_record_internal(
+    root: &Path,
+    module_key: &str,
+    mut fields: Map<String, Value>,
+    body: String,
+) -> AppResult<(PathBuf, String)> {
     let year = record_year(&fields);
-    let id = next_record_id(&root, &module_key, &year);
+    let id = next_record_id(root, module_key, &year);
     let title = title_from_fields(&fields, &id);
 
     fields.insert("id".into(), Value::String(id.clone()));
-    fields.insert("module".into(), Value::String(module_key.clone()));
+    fields.insert("module".into(), Value::String(module_key.to_string()));
     fields.insert("title".into(), Value::String(title));
 
-    let target = record_path(&root, &module_key, &year, &id)?;
+    let target = record_path(root, module_key, &year, &id)?;
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(stringify)?;
         if module_key == "litigation" || module_key == "non_litigation" {
@@ -233,10 +244,9 @@ fn create_record(
     }
 
     let markdown = render_markdown(&fields, &body)?;
-    fs::write(target, markdown).map_err(stringify)?;
-    create_linked_litigation_calendar_events(&root, &module_key, &id, &fields)?;
-
-    load_snapshot(&root)
+    fs::write(&target, markdown).map_err(stringify)?;
+    create_linked_litigation_calendar_events(root, module_key, &id, &fields)?;
+    Ok((target, id))
 }
 
 #[tauri::command]
@@ -530,6 +540,20 @@ pub fn run() {
             ai::ai_default_system_prompt,
             ai::ai_chat,
             ai::ai_test,
+            inbox::inbox_import_file,
+            inbox::inbox_import_file_by_path,
+            inbox::inbox_import_from_bytes,
+            inbox::inbox_list_pending,
+            inbox::inbox_save_analysis,
+            inbox::inbox_confirm_create,
+            inbox::inbox_confirm_attach,
+            inbox::inbox_skip,
+            inbox::inbox_list_processed,
+            inbox::inbox_read_file_text,
+            inbox::inbox_read_file_base64,
+            inbox::inbox_clear_all,
+            inbox::inbox_update_pipeline,
+            inbox::inbox_update_status,
             attachments::record_attachments_dir,
             attachments::list_attachments,
             attachments::add_attachments,

@@ -173,6 +173,71 @@ export interface ChatResult {
   latencyMs: number
 }
 
+export interface InboxSourceFile {
+  originalName: string
+  storedPath: string
+  sizeBytes: number
+  mimeType: string
+  contentHash?: string
+}
+
+export interface ClassifyResult {
+  documentType: string
+  targetModule: ModuleKey
+  confidence: number
+  reasoning: string
+}
+
+export interface ExtractFieldResult {
+  value: string
+  confidence: number
+  sourceExcerpt: string
+}
+
+export interface MatchResult {
+  matchType: 'existing' | 'new'
+  existingRecord?: {
+    id: string
+    module: ModuleKey
+    title: string
+    matchScore: number
+    matchReason: string
+  }
+  conflictWarning?: {
+    suspectedParties: string[]
+    existingClients: string[]
+    recommendation: string
+  }
+}
+
+export interface InboxSuggestion {
+  action: 'create_new' | 'attach_to_existing' | 'create_note'
+  targetModule: ModuleKey
+  existingRecordId?: string
+  suggestedFields: Record<string, string>
+  suggestedBody: string
+  conflictWarning?: string
+  confidence: number
+  reasoning: string
+}
+
+export interface InboxPipeline {
+  classify: ClassifyResult
+  extract: { fields: Record<string, ExtractFieldResult>; unresolved: string[] }
+  match: MatchResult
+  suggest: InboxSuggestion
+}
+
+export type InboxStatus = 'pending' | 'confirmed' | 'skipped'
+
+export interface InboxEntry {
+  id: string
+  createdAt: string
+  sourceFile: InboxSourceFile
+  pipeline: InboxPipeline | null
+  userDecision: InboxStatus
+}
+
 export const MODULE_ORDER: ModuleKey[] = [
   'client',
   'conflict_check',

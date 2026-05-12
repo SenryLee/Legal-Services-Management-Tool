@@ -55,6 +55,12 @@
   gap: 4px;
 }
 
+.nav-separator {
+  height: 1px;
+  margin: 6px 0;
+  background: #ded8cb;
+}
+
 .nav-item,
 button {
   border: 0;

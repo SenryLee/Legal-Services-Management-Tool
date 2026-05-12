@@ -87,6 +87,10 @@ pub fn create_workspace_dirs(root: &Path) -> AppResult<()> {
         "calendar",
         "ledgers",
         "templates",
+        "inbox",
+        "inbox/pending",
+        "inbox/sources",
+        "inbox/processed",
     ];
     for dir in dirs {
         fs::create_dir_all(root.join(dir)).map_err(stringify)?;
@@ -143,7 +147,7 @@ fn read_records(root: &Path) -> AppResult<RecordReadResult> {
             !entry.path().components().any(|part| {
                 matches!(
                     part.as_os_str().to_str(),
-                    Some(".legalbiz") | Some("ledgers") | Some("templates")
+                    Some(".legalbiz") | Some("ledgers") | Some("templates") | Some("inbox")
                 )
             })
         })

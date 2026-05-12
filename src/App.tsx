@@ -1,4 +1,4 @@
-import { AlertTriangle, FolderOpen, LayoutDashboard, Plus, RefreshCw, Settings2, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, FolderOpen, Inbox, LayoutDashboard, Plus, RefreshCw, Settings2, Sparkles, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { ENCOURAGEMENTS } from './encouragements'
@@ -31,6 +31,7 @@ import BrandLogo from './components/BrandLogo'
 import NavButton from './components/NavButton'
 import Onboarding from './components/Onboarding'
 import Dashboard from './components/Dashboard'
+import InboxPanel from './components/InboxPanel'
 import ModulePanel from './components/ModulePanel'
 import SettingsPage from './components/settings/SettingsPage'
 
@@ -39,7 +40,7 @@ type FieldFiltersByModule = Partial<Record<ModuleKey, Record<string, string>>>
 function App() {
   const [workspacePath, setWorkspacePath] = useState('')
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null)
-  const [active, setActive] = useState<ModuleKey | 'dashboard' | 'settings'>('dashboard')
+  const [active, setActive] = useState<ModuleKey | 'dashboard' | 'settings' | 'inbox'>('dashboard')
   const [month, setMonth] = useState(currentMonth)
   const [query, setQuery] = useState('')
   const [fieldFilters, setFieldFilters] = useState<FieldFiltersByModule>({})
@@ -72,7 +73,7 @@ function App() {
   }, [])
 
   const filteredRecords = useMemo(() => {
-    if (active === 'dashboard' || active === 'settings') return records
+    if (active === 'dashboard' || active === 'settings' || active === 'inbox') return records
     const definition = config.modules[active]
     const activeFieldFilters = fieldFilters[active] ?? {}
     const filterableFields = definition.fields.filter((field) => field.filterable)
@@ -109,7 +110,7 @@ function App() {
   }, [active, config, fieldFilters, month, query, records])
 
   const handleFieldFilter = useCallback((fieldKey: string, value: string) => {
-    if (active === 'dashboard' || active === 'settings') return
+    if (active === 'dashboard' || active === 'settings' || active === 'inbox') return
     setFieldFilters((prev) => {
       const current = prev[active] ?? {}
       const nextForModule = { ...current }
@@ -296,6 +297,13 @@ function App() {
             label="工作台"
             onClick={() => setActive('dashboard')}
           />
+          <NavButton
+            active={active === 'inbox'}
+            icon={Inbox}
+            label="收件箱"
+            onClick={() => setActive('inbox')}
+          />
+          <div className="nav-separator" />
           {MODULE_ORDER.map((moduleKey) => (
             <NavButton
               key={moduleKey}
@@ -372,7 +380,9 @@ function App() {
                 ? '工作台'
                 : active === 'settings'
                   ? '设置'
-                  : config.modules[active].label}
+                  : active === 'inbox'
+                    ? '智能收件箱'
+                    : config.modules[active].label}
             </h1>
             <p>
               {active === 'dashboard'
@@ -441,6 +451,16 @@ function App() {
               refreshRecents()
             }}
             setStatus={setStatus}
+          />
+        ) : active === 'inbox' ? (
+          <InboxPanel
+            workspacePath={snapshot?.workspacePath ?? workspacePath}
+            records={records}
+            config={config}
+            aiSettings={aiSettings}
+            onSnapshot={handleSnapshotResult}
+            setStatus={setStatus}
+            onConfigureAi={goToAiSettings}
           />
         ) : (
           <ModulePanel
