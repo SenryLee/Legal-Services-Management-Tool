@@ -29,6 +29,7 @@ export {
 // records
 export {
   createRecord,
+  updateRecord,
   runConflictCheck,
   localConflictCheck,
   generateLedgerSnapshot,

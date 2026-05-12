@@ -14,7 +14,8 @@ mod workspace;
 use workspace::{
     create_workspace_dirs, escape_table, is_initialized_workspace, load_snapshot,
     next_record_id, normalize_workspace_path, record_path, record_year, render_markdown,
-    stringify, title_from_fields, value_to_string, workspace_config_path, write_json,
+    safe_join_relative, split_frontmatter, stringify, title_from_fields, value_to_string,
+    workspace_config_path, write_json,
 };
 
 /// 给子模块用的 path 规范化函数
@@ -235,6 +236,54 @@ fn create_record(
     fs::write(target, markdown).map_err(stringify)?;
     create_linked_litigation_calendar_events(&root, &module_key, &id, &fields)?;
 
+    load_snapshot(&root)
+}
+
+#[tauri::command]
+fn update_record(
+    workspace_path: String,
+    record_path: String,
+    module_key: String,
+    mut fields: Map<String, Value>,
+    body: String,
+) -> AppResult<WorkspaceSnapshot> {
+    let root = normalize_workspace_path(&workspace_path)?;
+    let target = safe_join_relative(&root, record_path.trim())?;
+    if !target.exists() {
+        return Err(format!("记录文件不存在：{}", record_path));
+    }
+    if target.extension().and_then(|ext| ext.to_str()) != Some("md") {
+        return Err("只能修改 Markdown 记录文件。".into());
+    }
+
+    let raw = fs::read_to_string(&target).map_err(stringify)?;
+    let Some((frontmatter, _)) = split_frontmatter(&raw) else {
+        return Err("记录缺少 YAML frontmatter，无法安全修改。".into());
+    };
+    let existing_value: Value = serde_yaml::from_str(frontmatter).map_err(stringify)?;
+    let existing_fields = existing_value
+        .as_object()
+        .ok_or_else(|| "记录 frontmatter 必须是键值对象。".to_string())?;
+
+    let id = existing_fields
+        .get("id")
+        .and_then(Value::as_str)
+        .or_else(|| fields.get("id").and_then(Value::as_str))
+        .ok_or_else(|| "记录缺少 id，无法安全修改。".to_string())?
+        .to_string();
+    let module = existing_fields
+        .get("module")
+        .and_then(Value::as_str)
+        .unwrap_or(&module_key)
+        .to_string();
+    let title = title_from_fields(&fields, &id);
+
+    fields.insert("id".into(), Value::String(id));
+    fields.insert("module".into(), Value::String(module));
+    fields.insert("title".into(), Value::String(title));
+
+    let markdown = render_markdown(&fields, &body)?;
+    fs::write(target, markdown).map_err(stringify)?;
     load_snapshot(&root)
 }
 
@@ -468,6 +517,7 @@ pub fn run() {
             open_workspace,
             save_config,
             create_record,
+            update_record,
             run_conflict_check,
             generate_ledger_snapshot,
             workspace_exists,

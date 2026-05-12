@@ -54,6 +54,51 @@ export const createRecord = async (
   return snapshot
 }
 
+export const updateRecord = async (
+  workspacePath: string,
+  recordPath: string,
+  moduleKey: ModuleKey,
+  fields: Record<string, unknown>,
+  body: string,
+): Promise<WorkspaceSnapshot> => {
+  if (isTauri()) {
+    return invoke<WorkspaceSnapshot>('update_record', {
+      workspacePath,
+      recordPath,
+      moduleKey,
+      fields,
+      body,
+    })
+  }
+
+  const snapshot = loadDemo(workspacePath)
+  const index = snapshot.records.findIndex((item) =>
+    item.path === recordPath || (item.module === moduleKey && item.id === fields.id),
+  )
+  if (index < 0) throw new Error('未找到要修改的记录。')
+
+  const current = snapshot.records[index]
+  const id = current.id
+  const nextFields: Record<string, unknown> = {
+    ...fields,
+    id,
+    module: current.module,
+  }
+  const title = String(nextFields.title ?? nextFields.name ?? nextFields.client_name ?? id)
+  nextFields.title = title
+
+  snapshot.records[index] = {
+    ...current,
+    title,
+    date: dateFromFields(nextFields),
+    status: String(nextFields.status ?? nextFields.invoice_status ?? nextFields.conclusion ?? ''),
+    fields: nextFields,
+    body,
+  }
+  saveDemo(snapshot)
+  return snapshot
+}
+
 const appendLinkedCalendarEvents = (
   snapshot: WorkspaceSnapshot,
   moduleKey: ModuleKey,

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileSpreadsheet, Paperclip, Plus, Save, Search, ShieldCheck } from 'lucide-react'
+import { FileSpreadsheet, Paperclip, Pencil, Plus, Save, Search, ShieldCheck, X } from 'lucide-react'
 import type { AISettings, FieldDefinition, ModuleKey, RecordSummary, WorkspaceSnapshot } from '../domain'
 import { emptyRecordFor } from '../domain'
-import { createRecord, exportRowsToCsv, generateLedgerSnapshot } from '../storage'
+import { createRecord, exportRowsToCsv, generateLedgerSnapshot, updateRecord } from '../storage'
 import {
   buildRelationIndex,
   relationPatchForField,
@@ -53,28 +53,58 @@ export default function ModulePanel({
   const definition = snapshot.config.modules[moduleKey]
   const [form, setForm] = useState<Record<string, unknown>>(() => emptyRecordFor(definition))
   const [body, setBody] = useState('')
+  const [editingRecord, setEditingRecord] = useState<RecordSummary | null>(null)
   const [attachmentRecord, setAttachmentRecord] = useState<RecordSummary | null>(null)
 
   const relationIndex = useMemo(() => buildRelationIndex(allRecords), [allRecords])
   const ledgerFields = definition.fields.filter((field) => field.ledger).slice(0, 8)
   const filterableFields = definition.fields.filter((field) => field.filterable)
+  const hasTitleField = definition.fields.some((field) => field.key === 'title')
   const hasFieldFilters = Object.values(fieldFilters).some(Boolean)
 
   useEffect(() => {
     setForm(emptyRecordFor(definition))
     setBody('')
+    setEditingRecord(null)
   }, [definition, moduleKey])
 
   const handleSave = async () => {
     try {
-      const next = await createRecord(snapshot.workspacePath, moduleKey, form, body)
+      const fieldsForSave = { ...form }
+      if (!hasTitleField) delete fieldsForSave.title
+      const next = editingRecord
+        ? await updateRecord(
+            snapshot.workspacePath,
+            editingRecord.path ?? '',
+            moduleKey,
+            fieldsForSave,
+            body,
+          )
+        : await createRecord(snapshot.workspacePath, moduleKey, fieldsForSave, body)
       onSnapshot(next)
       setForm(emptyRecordFor(definition))
       setBody('')
-      setStatus(`已写入 ${definition.label} Markdown 记录。`)
+      setEditingRecord(null)
+      setStatus(editingRecord ? `已更新 ${editingRecord.id}。` : `已写入 ${definition.label} Markdown 记录。`)
     } catch (error) {
-      setStatus(`保存失败：${friendlyError(error)}`)
+      setStatus(`${editingRecord ? '更新' : '保存'}失败：${friendlyError(error)}`)
     }
+  }
+
+  const handleEdit = (record: RecordSummary) => {
+    const nextForm = { ...emptyRecordFor(definition), ...record.fields }
+    if (!hasTitleField) delete nextForm.title
+    setEditingRecord(record)
+    setForm(nextForm)
+    setBody(record.body ?? '')
+    setStatus(`正在修改 ${record.id}，保存后会更新原 Markdown 记录。`)
+  }
+
+  const handleCancelEdit = () => {
+    setEditingRecord(null)
+    setForm(emptyRecordFor(definition))
+    setBody('')
+    setStatus('已取消修改。')
   }
 
   const handleLedger = async () => {
@@ -202,7 +232,7 @@ export default function ModulePanel({
                 {ledgerFields.map((field) => (
                   <th key={field.key}>{field.label}</th>
                 ))}
-                <th className="th-actions">附件</th>
+                <th className="th-actions">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -235,6 +265,15 @@ export default function ModulePanel({
                       <button
                         type="button"
                         className="icon-btn"
+                        title="修改记录"
+                        onClick={() => handleEdit(record)}
+                        disabled={!record.path}
+                      >
+                        <Pencil size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
                         title="附件"
                         onClick={() => setAttachmentRecord(record)}
                         disabled={!record.path}
@@ -260,7 +299,17 @@ export default function ModulePanel({
       </section>
 
       <aside className="panel editor-panel">
-        <h2>新建{definition.label}</h2>
+        <div className="editor-heading">
+          <div>
+            <h2>{editingRecord ? `修改${definition.label}` : `新建${definition.label}`}</h2>
+            {editingRecord ? <span>{editingRecord.id}</span> : null}
+          </div>
+          {editingRecord ? (
+            <button type="button" className="ghost" onClick={handleCancelEdit}>
+              <X size={14} /> 取消
+            </button>
+          ) : null}
+        </div>
         <AiAssistant
           moduleKey={moduleKey}
           config={snapshot.config}
@@ -290,7 +339,8 @@ export default function ModulePanel({
           />
         </label>
         <button type="button" className="primary" onClick={handleSave}>
-          <Plus size={16} /> 保存为单事项 MD
+          {editingRecord ? <Save size={16} /> : <Plus size={16} />}
+          {editingRecord ? ' 保存修改' : ' 保存为单事项 MD'}
         </button>
 
         {supportsConflictCheck ? (

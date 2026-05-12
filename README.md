@@ -1,218 +1,160 @@
 # 法律人业务管理系统
 
-法律人业务管理系统是一个完全本地化的桌面应用，面向律师、法务或小型法律服务团队的日常业务记录管理。当前实现基于 Tauri 2 + React + TypeScript，核心目标不是做云端 CRM，而是让用户选择一个本地文件夹作为工作区，把客户、合同、诉讼、非诉、开票、日程和利冲检查记录持续保存在本机。
+![Tauri](https://img.shields.io/badge/Tauri-2.x-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=111)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Local First](https://img.shields.io/badge/Local--First-Markdown-1f1d19?style=for-the-badge)
+![Desktop](https://img.shields.io/badge/Desktop-macOS%20%7C%20Windows-7A5C37?style=for-the-badge)
 
-## 核心理念
+一套面向律师、法务和小型法律服务团队的本地桌面业务管理系统。它不是云端 CRM，也不要求账号、服务器或数据库部署；用户只需要选择一个本地文件夹，客户、合同、诉讼、非诉、开票、日程和利益冲突检查都会以 Markdown 文件保存在自己的电脑里。
 
-- 完全本地化：应用不依赖服务器、不要求账号系统、不提供云同步。业务数据保存在用户自己选择的本地工作区文件夹中。
-- Markdown 是事实来源：每条主记录都是一个 Markdown 文件，结构化字段写在 YAML frontmatter 中，正文保留沟通纪要、背景说明、复盘等自然语言内容。
-- 工作区先行：第一次打开软件时先选择或新建一个本地文件夹。之后可以在侧边栏打开最近工作区，也可以维护多个不同客户组、团队或年份的工作区。
-- 单事项 MD + 月度台账：客户、合同、案件等单条记录是主数据；月度台账是从主记录生成的快照/视图，不反过来作为事实来源。
-- 固定业务板块 + 字段级自定义：客户、利冲、合同、诉讼、非诉、开票、日历这些大板块保持固定；每个板块内部可以增加字段，并设置字段是否进入台账、是否用于筛选。
-- AI 是填表助手：AI/本地规则只负责从材料中提取字段草稿，用户确认后才写入表单和 Markdown。未配置 AI 时也可以使用本地正则规则做基础抽取。
-- SQLite 只作为未来可重建索引/缓存：即使未来出现 `.legalbiz/index.db`，它也不是事实来源；删除后应能从 Markdown 文件和 `.legalbiz/config.json` 重建。
+> 核心定位：本地文件夹就是工作区，Markdown 就是事实层，AI 只做填表助手，所有写入都由用户确认。
 
-## 当前已实现功能
+## 目录
 
-### 工作区
+- [产品亮点](#产品亮点)
+- [适合谁使用](#适合谁使用)
+- [功能总览](#功能总览)
+- [业务流程图](#业务流程图)
+- [主要模块](#主要模块)
+- [工作区结构](#工作区结构)
+- [典型使用流程](#典型使用流程)
+- [AI 填表与文件解析](#ai-填表与文件解析)
+- [使用技巧](#使用技巧)
+- [安装与运行](#安装与运行)
+- [从源码开发](#从源码开发)
+- [GitHub Actions 打包](#github-actions-打包)
+- [数据与隐私边界](#数据与隐私边界)
+- [路线图](#路线图)
 
-- 新建工作区：选择一个本地文件夹后，自动创建标准目录和 `.legalbiz/config.json`。
-- 打开工作区：校验 `.legalbiz/config.json` 后读取当前工作区所有标准 Markdown 记录。
-- 最近工作区：记录最近打开的工作区，支持从侧边栏快速打开，也支持清空最近列表。
-- 自动恢复：启动时会尝试打开上次使用过的工作区。
-- 重读 MD：可从 Markdown 重新读取当前工作区，适合用户在 Finder、编辑器或 Obsidian 中手动改过文件后的刷新。
+## 产品亮点
 
-### 业务板块
+| 能力 | 说明 |
+| --- | --- |
+| 完全本地化 | 不依赖服务器，不要求账号系统，业务资料保存在用户选择的本地文件夹中。 |
+| Markdown 主数据 | 每条记录都是独立 Markdown，结构化字段写入 YAML frontmatter，自然语言说明写在正文。 |
+| 单事项 + 月快照 | 客户、合同、案件等单条记录是事实来源，月度台账只是从事实来源生成的快照。 |
+| 固定业务模块 | 客户、利冲、服务合同、诉讼、非诉、开票、日历七大模块覆盖常见法律业务。 |
+| 字段级自定义 | 每个模块可以调整字段是否入台账、是否可筛选，也可以增加字段。 |
+| 可直接修改记录 | 台账列表中点击“修改记录”，右侧表单进入编辑模式，保存后更新原 Markdown。 |
+| 本地利冲辅助 | 基于现有客户、历史事项和相对方字段做本地匹配，帮助立项前人工核查。 |
+| AI 辅助填表 | 可粘贴文本或上传文件，让 AI 生成字段草稿，用户确认后再应用到表单。 |
+| 附件归档 | 每条记录可维护独立附件目录，便于和 Finder、Obsidian、Git 等工具配合。 |
+| 跨平台安装包 | 支持 macOS `.dmg`，GitHub Actions 可构建 Windows NSIS `*.exe` 安装包。 |
 
-- 客户管理：记录客户名称、类型、联系人、关联方、历史相对方、负责人、建档日期和状态。
-- 利冲检查：记录拟委托人、相对方、关联方、检查日期、人工结论和疑似命中摘要。
-- 服务合同：记录合同名称、客户、合同编号、服务范围、签署日期、合同金额、已收金额、开票状态和合同状态。
-- 诉讼管理：记录案件名称、客户/委托人、我方当事人、对方当事人、第三人、案号、法院/仲裁机构、案由、程序、开庭、期限、下一步任务和案件状态。
-- 非诉管理：记录合同审查、咨询、专项服务等非诉事项，包含接收日期、交付期限、审查轮次、页数、字数和办理状态。
-- 开票管理：围绕服务合同记录应收、已收、开票状态、发票号和开票日期。
-- 日历管理：记录开庭、会议、期限、交付、跟进、任务、电话、出差等日程。
+## 适合谁使用
 
-### 台账、筛选与导出
+- 独立律师：希望用一个本地工具管理客户、案件、合同、开票和日程。
+- 小型法律服务团队：不想先搭服务器，也不想把全部业务资料放到云端 CRM。
+- 企业法务：需要把事项、合同、日程、开票、利冲记录沉淀在本地资料库。
+- 重视可迁移数据的人：希望记录能被普通文本编辑器、Obsidian、Git 继续读取。
 
-- 每个板块都有台账列表，按当前月份、关键词和字段筛选显示记录。
-- 字段设置中可控制字段是否进入台账，台账默认展示该板块入台账字段。
-- 可生成月度 Markdown 快照，输出到 `ledgers/{year}/{yyyy-mm}-{module}.md`。
-- 可按当前筛选结果导出 CSV，Excel 可直接打开。
+## 功能总览
 
-### 全局数据关联
+```mermaid
+flowchart TB
+  Product((法律人业务管理系统))
+  Product --> Workspace[工作区]
+  Product --> Modules[台账模块]
+  Product --> Data[数据能力]
+  Product --> Assistant[智能辅助]
+  Product --> Delivery[交付]
 
-- 系统会基于当前工作区的全部记录建立本地关联索引。
-- 客户字段支持从已有客户中选择和复用。
-- 合同/事项字段支持从已有服务合同、诉讼事项、非诉事项中选择和跳转。
-- 开票表单选择“关联服务合同”后，会自动带出合同客户、合同金额、已收金额和标题等可复用字段，保存前仍可手动修改。
-- 台账中的关联字段会显示“查看已关联”入口，点击后跳转到对应板块并自动搜索该记录。
+  Workspace --> WorkspaceA[新建本地工作区]
+  Workspace --> WorkspaceB[打开最近工作区]
+  Workspace --> WorkspaceC[重读 Markdown]
+  Workspace --> WorkspaceD[多工作区切换]
 
-### 利冲检查
+  Modules --> ModulesA[客户管理]
+  Modules --> ModulesB[利冲检查]
+  Modules --> ModulesC[服务合同]
+  Modules --> ModulesD[诉讼管理]
+  Modules --> ModulesE[非诉管理]
+  Modules --> ModulesF[开票管理]
+  Modules --> ModulesG[日历管理]
 
-- 在利冲、合同、诉讼、非诉表单中填入拟委托人/客户、相对方、关联方后，系统会基于当前工作区已有客户、历史事项和利冲记录做本地比对。
-- 结果会区分阻断、提醒和候选命中，帮助用户在正式立项前人工核查。
-- 利冲结果不自动替代律师判断；当前逻辑是本地规则辅助筛查。
+  Data --> DataA[单事项 Markdown]
+  Data --> DataB[YAML frontmatter]
+  Data --> DataC[月度台账快照]
+  Data --> DataD[CSV 导出]
+  Data --> DataE[附件目录]
 
-### AI / 本地规则填表
+  Assistant --> AssistantA[AI 字段抽取]
+  Assistant --> AssistantB[本地规则抽取]
+  Assistant --> AssistantC[关系字段复用]
+  Assistant --> AssistantD[本地利冲分析]
 
-- 每个新建表单都有“AI 助手 · 解析后填充表单”。
-- 支持粘贴材料，也支持上传 `.pdf`、`.docx`、`.txt`、`.md`、`.csv`、`.json`、`.yml` 等文件进行文本抽取。
-- 未配置 AI 时，可使用“本地正则”做基础字段抽取。
-- 配置 AI 后，当前支持 OpenAI、DeepSeek、Claude、豆包/火山方舟和自定义 OpenAI 兼容接口。
-- AI 返回的是字段建议，用户可以选择、改写、映射字段后再应用到表单；最终保存仍由用户点击“保存为单事项 MD”完成。
-
-### Word 自动填表
-
-- 非诉管理提供“Word 自动填表 · 页数/字数”。
-- 上传 `.docx` 后，会读取 Word 元数据或正文统计结果，自动填入“页数”和“字数”字段。
-- PDF、旧版 `.doc`、图片和 Excel 不支持这个页数/字数入口；旧版 `.doc` 请先另存为 `.docx`。
-
-### 附件
-
-- 每条已保存记录可打开附件抽屉。
-- 桌面 App 中可选择文件并复制到该记录的附件目录，也可以在 Finder 中直接管理附件目录。
-- 对 `index.md` 类型记录，附件目录为同级 `attachments/`；对单个 `.md` 文件记录，附件目录为同级 `{文件名}-attachments/`。
-- 浏览器演示模式下附件管理不可用。
-
-### 首页工作台
-
-- 显示客户档案、诉讼案件、非诉业务、待核开票等摘要指标。
-- 首页包含月视图日历，按周一到周日显示当月日程。
-- 近期日程汇总开庭、会议、交付、期限和跟进安排。
-- 待办视图会从日历任务、诉讼进度、非诉交付和开票状态中汇总未完成事项。
-
-### Markdown 读取诊断
-
-- 打开或重读工作区时，系统会扫描标准业务目录下的 Markdown。
-- 如果标准记录缺少 YAML frontmatter、frontmatter 未闭合或 YAML 解析失败，会在顶部显示诊断提示。
-- 修复 Markdown 后点击“重读 MD”即可重新读取。
-
-## 典型使用流程
-
-### 1. 第一次打开：选择工作区
-
-1. 启动桌面 App。
-2. 点击侧边栏“浏览”按钮，选择一个本地文件夹。
-3. 如果该文件夹不是已初始化工作区，点击“新建”；系统会创建目录和 `.legalbiz/config.json`。
-4. 如果该文件夹已经是工作区，点击“打开”；系统会读取已有 Markdown 记录。
-5. 后续可直接从“最近工作区”打开，也可以为不同业务范围创建多个工作区。
-
-### 2. 新增客户
-
-1. 进入“客户管理”。
-2. 填写客户名称、客户类型、联系人、关联方、历史相对方、负责人、状态等字段。
-3. 在“Markdown 正文”中补充背景、服务边界、沟通纪要或复盘。
-4. 点击“保存为单事项 MD”。
-
-客户记录会写入：
-
-```text
-clients/{client-id}/index.md
+  Delivery --> DeliveryA[macOS DMG]
+  Delivery --> DeliveryB[Windows EXE]
+  Delivery --> DeliveryC[GitHub Actions]
 ```
 
-### 3. 新增服务合同
+## 业务流程图
 
-1. 进入“服务合同”。
-2. 在“客户”字段中选择或输入已有客户名称。
-3. 填写合同编号、服务范围、签署日期、金额、收款和开票状态。
-4. 可使用 AI/本地规则从合同文本中提取字段草稿。
-5. 保存后生成合同 Markdown。
+### 从材料到台账
 
-合同记录会写入：
-
-```text
-contracts/{contract-id}/index.md
+```mermaid
+flowchart LR
+  A[选择本地工作区] --> B[新建或打开业务模块]
+  B --> C{录入方式}
+  C -->|手动填写| D[结构化字段]
+  C -->|AI 辅助| E[字段草稿]
+  C -->|本地规则| F[基础抽取]
+  E --> G[用户核对]
+  F --> G
+  D --> G
+  G --> H[保存为单事项 Markdown]
+  H --> I[台账列表]
+  H --> J[附件目录]
+  H --> K[月度 MD 快照]
+  H --> L[CSV 导出]
 ```
 
-### 4. 新增诉讼事项
+### 本地数据边界
 
-1. 进入“诉讼管理”。
-2. 选择或输入客户/委托人，填写当事人、案号、法院/仲裁机构、案由、程序、开庭日期、关键期限、下一步任务等。
-3. 表单下方会自动显示与现有客户的利益冲突分析。
-4. 保存后，诉讼记录会进入 `matters/{year}/...`。
-5. 如果填写了开庭日期、关键期限或下一步任务截止日期，系统会自动生成对应日历记录。
+```mermaid
+flowchart TB
+  subgraph App[桌面 App]
+    UI[React 前端]
+    Tauri[Tauri 命令层]
+    AI[可选 AI 接口]
+  end
 
-诉讼记录会写入：
+  subgraph Workspace[用户本地工作区文件夹]
+    Config[.legalbiz/config.json]
+    MD[业务 Markdown]
+    Attach[附件目录]
+    Ledger[月度台账快照]
+  end
 
-```text
-matters/{year}/{litigation-id}/index.md
+  UI --> Tauri
+  Tauri --> Config
+  Tauri --> MD
+  Tauri --> Attach
+  Tauri --> Ledger
+  UI -. 用户配置后才调用 .-> AI
 ```
 
-自动生成的日程会写入：
+## 主要模块
+
+| 模块 | 解决的问题 | 典型字段 |
+| --- | --- | --- |
+| 客户管理 | 管理客户基本信息、联系人、关联方、历史相对方。 | 客户名称、客户类型、联系人、关联方、历史相对方、负责人、状态 |
+| 利冲检查 | 在接案或签约前记录利益冲突核查过程。 | 检查主题、拟委托人、相对方、关联方、检查日期、人工结论 |
+| 服务合同 | 管理委托合同、法律服务合同和收款状态。 | 合同名称、客户、合同编号、服务范围、签署日期、金额、开票状态 |
+| 诉讼管理 | 管理案件信息、法院、案号、开庭、期限和下一步任务。 | 案件名称、客户/委托人、当事人、案号、法院、案由、程序、关键期限 |
+| 非诉管理 | 管理合同审查、咨询、专项服务等非诉事项。 | 业务名称、客户、业务类型、交付期限、审查轮次、页数、字数、状态 |
+| 开票管理 | 管理应收、已收、发票号、开票日期和合同关联。 | 开票事项、客户、关联服务合同、应收金额、已收金额、开票状态 |
+| 日历管理 | 管理开庭、会议、期限、交付、任务等日程。 | 日程标题、类型、日期、时间、关联事项、状态 |
+
+## 工作区结构
+
+系统不会把数据锁在私有数据库里。一个标准工作区大致如下：
 
 ```text
-calendar/{year}/{calendar-id}.md
-```
-
-### 5. 新增非诉事项
-
-1. 进入“非诉管理”。
-2. 选择客户，填写业务类型、审查对象/咨询内容、接收日期、交付期限、审查轮次和状态。
-3. 如需统计文档页数/字数，使用“Word 自动填表 · 页数/字数”上传 `.docx`。
-4. 如需从材料提取字段，使用 AI 助手或本地正则。
-5. 保存后生成非诉 Markdown。
-
-非诉记录会写入：
-
-```text
-matters/{year}/{non-litigation-id}/index.md
-```
-
-### 6. 新增开票记录
-
-1. 进入“开票管理”。
-2. 在“关联服务合同”中选择已有合同。
-3. 系统会自动带出客户、应收金额、已收金额和标题等字段。
-4. 填写开票状态、发票号、开票日期。
-5. 保存为单条开票 Markdown。
-
-开票记录会写入：
-
-```text
-invoices/{year}/{invoice-id}.md
-```
-
-### 7. 新增日程
-
-1. 进入“日历管理”。
-2. 填写日程标题、类型、日期、时间、关联事项和状态。
-3. 可在日历台账、首页月视图和近期日程中查看。
-
-日程记录会写入：
-
-```text
-calendar/{year}/{calendar-id}.md
-```
-
-### 8. 生成台账和导出
-
-1. 在任一业务板块选择月份。
-2. 使用关键词和字段筛选收窄当前列表。
-3. 点击“生成月度 MD 快照”输出月度台账 Markdown。
-4. 点击“导出 CSV”导出当前筛选结果。
-
-月度台账会写入：
-
-```text
-ledgers/{year}/{yyyy-mm}-{module}.md
-```
-
-## PDF 和不支持文件的处理方式
-
-- AI 助手支持提取有文字层的 PDF；如果 PDF 是扫描件或图片 PDF，当前本地暂不支持 OCR，需要先用 Adobe、WPS 或其他工具 OCR 后再上传，或复制可选中文本到输入框。
-- 非诉“页数/字数自动填表”只支持 `.docx`。PDF 不能用于该入口；请手动填写页数/字数，或把材料转换为 `.docx` 后再试。
-- 旧版 `.doc` 不能可靠解析；请在 Word 中另存为 `.docx`。
-- Excel、图片和其他二进制文件暂不支持直接抽取；可先导出为文本、CSV，或复制内容到 AI 助手。
-
-## 工作区数据结构
-
-一个标准工作区大致如下：
-
-```text
-工作区/
+法律业务工作区/
   .legalbiz/
     config.json
-    index.db                  # 未来可重建索引/缓存；不是事实来源
   clients/
     CLI-2026-0001/
       index.md
@@ -247,11 +189,10 @@ ledgers/{year}/{yyyy-mm}-{module}.md
       CAL-2026-0001-attachments/
   ledgers/
     2026/
-      2026-04-litigation.md
-  templates/
+      2026-05-litigation.md
 ```
 
-记录 Markdown 示例：
+单条 Markdown 记录示例：
 
 ```markdown
 ---
@@ -261,86 +202,247 @@ title: 岚山科技 v. 北辰贸易 服务合同纠纷
 client_name: 上海岚山科技有限公司
 opposing_parties: 北辰贸易有限公司
 case_number: (2026)沪0105民初1234号
+court: 上海市长宁区人民法院
+cause_of_action: 服务合同纠纷
 opened_at: 2026-03-15
-hearing_date: 2026-04-30
-status: 已排期开庭
+limitation_deadline: 2026-05-20
+status: 待开庭
 ---
 
 需要在开庭前完成证据目录、代理意见初稿。
 ```
 
-读取时，系统以 YAML frontmatter 作为结构化字段，以正文作为备注/纪要内容。台账和导出都从这些记录重新汇总。
+## 典型使用流程
 
-## 安装使用
+### 1. 第一次打开
 
-### 从 Release 下载
+1. 打开桌面 App。
+2. 点击侧边栏的“浏览”按钮，选择一个本地文件夹。
+3. 如果该文件夹还不是工作区，点击“新建”。
+4. 如果已经是工作区，点击“打开”。
+5. 后续可直接从“最近工作区”进入。
 
-1. 到项目的 GitHub Releases 页面下载对应平台安装包。
-2. macOS 用户下载 `.dmg`，打开后将应用拖入“应用程序”。
-3. 首次启动后选择一个本地文件夹作为工作区。
-4. 如果 macOS 提示应用未签名或来自未验证开发者，需要在系统设置中允许打开；完整签名和自动更新仍属于 Roadmap。
+### 2. 新建记录
 
-当前 Tauri 配置包含 macOS `dmg`、Windows `msi` 和 `nsis` 打包目标。跨平台安装包通常需要在对应系统上构建。
+1. 进入对应业务模块，例如“客户管理”或“诉讼管理”。
+2. 填写结构化字段。
+3. 在“Markdown 正文”里补充背景、沟通纪要、办理思路或复盘。
+4. 点击“保存为单事项 MD”。
 
-### 本地开发
+### 3. 修改记录
 
-环境要求：
+1. 在台账列表中找到目标记录。
+2. 点击右侧铅笔按钮“修改记录”。
+3. 右侧表单会进入“修改”模式并载入原字段和正文。
+4. 修改后点击“保存修改”。
+5. 系统会更新原 Markdown 文件，不会新增重复记录。
 
-- Node.js / npm
-- Rust 工具链
-- macOS、Windows 或 Linux 对应的 Tauri 运行环境
+### 4. 生成月度台账
 
-安装依赖：
+1. 在任一模块选择月份。
+2. 使用关键词或字段筛选当前列表。
+3. 点击“生成月度 MD 快照”。
+4. 快照会写入 `ledgers/{year}/{yyyy-mm}-{module}.md`。
+
+### 5. 导出 CSV
+
+1. 在台账列表中筛选出需要的记录。
+2. 点击“导出 CSV”。
+3. 导出的 CSV 带 UTF-8 BOM，Excel 可以直接打开。
+
+## AI 填表与文件解析
+
+每个新建或修改表单都可以配合“AI 助手 · 解析后填充表单”使用。
+
+```mermaid
+sequenceDiagram
+  participant U as 用户
+  participant A as 桌面 App
+  participant L as 本地规则
+  participant M as 可选 AI 模型
+  participant F as 表单
+
+  U->>A: 粘贴材料或选择文件
+  A->>L: 尝试本地文本抽取
+  alt 已配置 AI
+    A->>M: 发送用户确认的材料文本
+    M-->>A: 返回字段建议
+  else 未配置 AI
+    L-->>A: 返回基础字段建议
+  end
+  A->>F: 展示可勾选字段草稿
+  U->>F: 核对、调整、应用
+  U->>A: 点击保存
+```
+
+支持场景：
+
+- 粘贴合同、邮件、沟通纪要、案件摘要等文本。
+- 上传有文字层的 PDF、DOCX、TXT、MD、CSV、JSON、YAML 等文件。
+- 对非诉事项上传 `.docx`，自动读取页数和字数。
+- 未配置 AI 时，仍可使用本地规则做基础提取。
+
+注意边界：
+
+- 扫描件 PDF 和图片 PDF 目前不做本地 OCR，需要先 OCR 后再粘贴或上传。
+- 旧版 `.doc` 不可靠，建议另存为 `.docx`。
+- AI 返回的是草稿，不会直接写入 Markdown；用户必须确认后保存。
+
+## 使用技巧
+
+### 多工作区
+
+可以按年份、团队、客户组或业务类型创建多个工作区，例如：
+
+```text
+LegalBiz-2026/
+LegalBiz-企业客户/
+LegalBiz-个人客户/
+LegalBiz-团队共享/
+```
+
+### 字段设置
+
+在“设置”里可以调整各模块字段：
+
+- 是否进入台账。
+- 是否作为筛选字段。
+- 是否新增自定义字段。
+
+建议把“真正需要横向比较”的字段放入台账，例如状态、负责人、日期、金额；把较长的说明放进 Markdown 正文。
+
+### 关系字段
+
+客户、合同、事项字段支持从已有记录中复用信息。常见用法：
+
+- 开票记录选择服务合同后，自动带出客户、金额和合同标题。
+- 诉讼或非诉事项选择客户后，利冲区域会基于历史客户、相对方和关联方提示风险。
+- 台账中的关联字段可跳转到对应记录。
+
+### 外部编辑
+
+因为数据是 Markdown，你可以：
+
+- 用 Obsidian 查看和补充正文。
+- 用 VS Code 批量搜索。
+- 用 Git 做版本管理。
+- 用系统 Finder 管理附件。
+
+外部改动后，回到 App 点击“重读 MD”即可刷新。
+
+## 安装与运行
+
+### 下载发行版
+
+到 GitHub Releases 下载对应安装包：
+
+- macOS Apple Silicon：下载 `.dmg`，打开后拖入“应用程序”。
+- Windows x64：下载 `*-setup.exe`，双击安装。
+
+macOS 首次打开如提示“未识别开发者”，可在“系统设置 -> 隐私与安全性”里允许打开。当前本地测试包未做 Apple notarization。
+
+### 本地试用
 
 ```bash
 npm install
-```
-
-仅启动前端开发服务器：
-
-```bash
-npm run dev
-```
-
-启动桌面开发模式：
-
-```bash
 npm run tauri:dev
 ```
 
-构建生产前端：
+### 浏览器演示
 
 ```bash
-npm run build
+npm install
+npm run dev
 ```
 
-打包桌面安装包：
+浏览器模式会使用演示数据和 localStorage，不会访问真实本地文件系统；完整文件夹、附件和安装包能力请使用 Tauri 桌面 App。
+
+## 从源码开发
+
+### 环境要求
+
+- Node.js 24
+- Rust stable
+- macOS 打包需要 Xcode Command Line Tools
+- Windows 打包建议使用 GitHub Actions 的 `windows-latest`
+
+### 常用命令
 
 ```bash
+npm ci
+npm run lint
+npm run build
+cd src-tauri && cargo check
+cd ..
 npm run tauri:build
 ```
 
-其他常用检查：
+### 技术结构
 
-```bash
-npm run lint
+```mermaid
+flowchart LR
+  React[React + TypeScript] --> Storage[src/storage/*]
+  Storage --> Tauri[Tauri invoke commands]
+  Tauri --> Rust[src-tauri/src/*]
+  Rust --> Files[Local Markdown Workspace]
+  React --> Demo[Browser demo localStorage]
 ```
 
-浏览器开发模式会使用演示工作区 fallback，适合快速查看界面；附件、AI 跨域调用和真实文件系统能力以桌面 App 为准。
+主要目录：
 
-## Roadmap 预览
+| 路径 | 说明 |
+| --- | --- |
+| `src/components/` | 页面组件、表单、台账、附件抽屉、设置页。 |
+| `src/storage/` | 前端数据访问层，统一封装 Tauri 和浏览器演示模式。 |
+| `src/domain.ts` | 模块、字段、记录和 AI 配置类型。 |
+| `src-tauri/src/` | Rust/Tauri 命令、工作区读写、配置迁移。 |
+| `src-tauri/icons/` | 应用图标，macOS 打包需要 `icon.icns`。 |
+| `.github/workflows/build.yml` | macOS DMG 和 Windows EXE 自动打包流程。 |
 
-以下内容是计划方向，不代表当前已经完成：
+## GitHub Actions 打包
 
-- 更强的 `.doc`、PDF 和 OCR 支持：减少手动转换，支持扫描版材料的本地 OCR 或可控 OCR 流程。
-- 真正的 SQLite 可重建索引：从 Markdown 和配置文件构建索引，用于更快搜索、统计和关联查询，但仍不把 SQLite 作为事实来源。
-- 更多统计图表：围绕案件状态、合同金额、回款、开票、期限、客户来源和业务类型做更完整的可视化。
-- 更完整的安装包签名和自动更新：完善 macOS/Windows 签名、公证、版本发布和自动更新流程。
-- 更细的附件与材料管理：围绕事项材料、证据、合同版本和交付文档建立更清晰的本地目录和引用规则。
+当前 workflow 支持两种入口：
 
-## 当前边界
+- 推送到 `main`：自动构建并上传 workflow artifacts。
+- 推送 `v*` 标签：构建后创建或更新 GitHub Release，并上传安装包。
+- 手动运行 `Build Installers`：可在 Actions 页面点击 `Run workflow`。
 
-- 当前不是云服务，没有账号、团队权限、云同步或网页后台。
-- AI 功能需要用户自行配置接口；未配置时只能使用本地规则抽取。
-- 月度台账是生成文件，不建议把它当成唯一数据来源。
-- 如果手动修改 Markdown，请保持 YAML frontmatter 可解析；否则系统会在重读时给出诊断提示。
+```mermaid
+flowchart TB
+  Trigger[push main / tag / workflow_dispatch] --> Matrix{Build Matrix}
+  Matrix --> Mac[macos-latest<br/>aarch64-apple-darwin]
+  Matrix --> Win[windows-latest<br/>x86_64-pc-windows-msvc]
+  Mac --> DMG[Upload .dmg artifact]
+  Win --> EXE[Upload NSIS .exe artifact]
+  DMG --> Release{tag starts with v?}
+  EXE --> Release
+  Release -->|yes| GHRelease[Publish GitHub Release]
+  Release -->|no| Artifacts[Actions Artifacts only]
+```
+
+Windows 只构建 NSIS `*.exe`，不再构建 MSI；这样可以避开 WiX/MSI 乱码或 `light.exe` 失败问题。macOS 打包包含真实 `src-tauri/icons/icon.icns`，用于避免 `No matching IconType`。
+
+## 数据与隐私边界
+
+| 数据 | 默认位置 | 是否离开本机 |
+| --- | --- | --- |
+| 业务记录 | 用户选择的工作区 Markdown | 否 |
+| 附件 | 每条记录对应附件目录 | 否 |
+| 最近工作区 | App 配置目录 / localStorage | 否 |
+| AI API Key | 本机配置 | 仅调用用户配置的 AI 服务时使用 |
+| AI 输入材料 | 用户主动提交的文本 | 仅配置并调用 AI 时发送 |
+
+本项目的默认设计是 local-first。是否使用 AI、使用哪个模型、发送哪些文本，均由用户配置和操作决定。
+
+## 路线图
+
+- 更完整的案件文件整理工作流。
+- 文件收件箱：拖入文件后自动判断类型、提取字段、匹配现有记录。
+- 更细的重复记录检测和合并提示。
+- 更多文档格式解析和 OCR 接入。
+- 可选的 SQLite 索引缓存，支持更快搜索，但 Markdown 仍是事实来源。
+- Windows 安装包签名和 macOS notarization。
+
+## 许可
+
+当前仓库用于个人和团队内部法律业务管理工具开发。正式开源许可如需发布，请在仓库中补充 `LICENSE` 文件。

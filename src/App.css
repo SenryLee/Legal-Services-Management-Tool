@@ -800,6 +800,24 @@ td span {
   gap: 12px;
 }
 
+.editor-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-heading h2 {
+  margin: 0;
+}
+
+.editor-heading span {
+  display: block;
+  margin-top: 4px;
+  color: #8a7e6c;
+  font-size: 12px;
+}
+
 .dynamic-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1693,12 +1711,16 @@ button.ghost {
 
 .th-actions,
 .td-actions {
-  width: 56px;
+  width: 86px;
   text-align: center;
 }
 
 .td-actions button {
-  margin: 0 auto;
+  margin: 0 2px;
+}
+
+.td-actions {
+  white-space: nowrap;
 }
 
 /* ---------- Attachment drawer ---------- */

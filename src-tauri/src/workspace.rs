@@ -304,6 +304,21 @@ fn is_standard_record_path(root: &Path, path: &Path) -> bool {
     }
 }
 
+pub fn safe_join_relative(root: &Path, relative: &str) -> AppResult<PathBuf> {
+    let path = Path::new(relative);
+    if path.is_absolute()
+        || path.components().any(|part| {
+            matches!(
+                part,
+                Component::ParentDir | Component::Prefix(_) | Component::RootDir
+            )
+        })
+    {
+        return Err("只能访问工作区内的相对路径。".into());
+    }
+    Ok(root.join(path))
+}
+
 pub fn split_frontmatter(raw: &str) -> Option<(&str, &str)> {
     let normalized = raw.strip_prefix('\u{feff}').unwrap_or(raw);
     let trimmed = normalized
