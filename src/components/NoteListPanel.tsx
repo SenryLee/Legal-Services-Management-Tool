@@ -38,8 +38,10 @@ export default function NoteListPanel({
   const savedPathRef = useRef<string | null>(null)
   const bodyRef = useRef(body)
   const titleRef = useRef(title)
-  bodyRef.current = body
-  titleRef.current = title
+  useEffect(() => {
+    bodyRef.current = body
+    titleRef.current = title
+  }, [body, title])
 
   // Load notes
   const refresh = useCallback(async () => {
