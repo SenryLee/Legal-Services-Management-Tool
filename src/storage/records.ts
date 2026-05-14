@@ -205,6 +205,23 @@ export const localConflictCheck = (records: RecordSummary[], terms: string[]): C
   return hits
 }
 
+export const deleteRecord = async (
+  workspacePath: string,
+  recordPath: string,
+): Promise<WorkspaceSnapshot> => {
+  if (isTauri()) {
+    return invoke<WorkspaceSnapshot>('delete_record', { workspacePath, recordPath })
+  }
+
+  const snapshot = loadDemo(workspacePath)
+  const index = snapshot.records.findIndex((item) => item.path === recordPath)
+  if (index >= 0) {
+    snapshot.records.splice(index, 1)
+  }
+  saveDemo(snapshot)
+  return snapshot
+}
+
 export const generateLedgerSnapshot = async (
   workspacePath: string,
   month: string,

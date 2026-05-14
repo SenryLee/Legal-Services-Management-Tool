@@ -11,6 +11,7 @@ mod config;
 mod demo;
 mod inbox;
 mod litigation_organizer;
+mod notes;
 mod workspace;
 
 use workspace::{
@@ -374,6 +375,27 @@ fn create_linked_litigation_calendar_events(
 }
 
 #[tauri::command]
+fn delete_record(workspace_path: String, record_path: String) -> AppResult<WorkspaceSnapshot> {
+    let root = normalize_workspace_path(&workspace_path)?;
+    let target = safe_join_relative(&root, record_path.trim())?;
+    if !target.exists() {
+        return Err(format!("记录文件不存在：{}", record_path));
+    }
+    if target.extension().and_then(|ext| ext.to_str()) != Some("md") {
+        return Err("只能删除 Markdown 记录文件。".into());
+    }
+    // For index.md inside a folder (clients, contracts, matters) — delete the whole folder
+    if target.file_name().and_then(|n| n.to_str()) == Some("index.md") {
+        if let Some(parent) = target.parent() {
+            fs::remove_dir_all(parent).map_err(stringify)?;
+        }
+    } else {
+        fs::remove_file(&target).map_err(stringify)?;
+    }
+    load_snapshot(&root)
+}
+
+#[tauri::command]
 fn run_conflict_check(records: Vec<RecordSummary>, terms: Vec<String>) -> Vec<ConflictHit> {
     let normalized: Vec<String> = terms
         .into_iter()
@@ -538,6 +560,7 @@ pub fn run() {
             save_config,
             create_record,
             update_record,
+            delete_record,
             litigation_organizer::scan_litigation_case,
             litigation_organizer::read_litigation_case_file,
             litigation_organizer::propose_litigation_case_plan,
@@ -568,6 +591,12 @@ pub fn run() {
             inbox::inbox_clear_all,
             inbox::inbox_update_pipeline,
             inbox::inbox_update_status,
+            notes::note_save,
+            notes::note_update,
+            notes::note_delete,
+            notes::note_list,
+            notes::note_read_body,
+            notes::note_search,
             attachments::record_attachments_dir,
             attachments::list_attachments,
             attachments::add_attachments,

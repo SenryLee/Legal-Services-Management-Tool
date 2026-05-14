@@ -30,6 +30,7 @@ export {
 export {
   createRecord,
   updateRecord,
+  deleteRecord,
   runConflictCheck,
   localConflictCheck,
   generateLedgerSnapshot,
@@ -72,6 +73,17 @@ export {
   openInFinder,
   pickFilesToAttach,
 } from './attachments'
+
+// notes
+export {
+  saveNote,
+  updateNote,
+  deleteNote,
+  listNotes,
+  loadNoteBody,
+  searchNotes,
+} from './notes'
+export type { NoteSummary } from './notes'
 
 // litigation organizer
 export {

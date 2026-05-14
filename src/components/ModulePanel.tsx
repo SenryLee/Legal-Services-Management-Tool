@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileSpreadsheet, FolderKanban, Paperclip, Pencil, Plus, Save, Search, ShieldCheck, X } from 'lucide-react'
+import { FileSpreadsheet, FolderKanban, Paperclip, Pencil, Plus, Save, Search, ShieldCheck, Trash2, X } from 'lucide-react'
 import type { AISettings, FieldDefinition, ModuleKey, RecordSummary, WorkspaceSnapshot } from '../domain'
 import { emptyRecordFor } from '../domain'
-import { createRecord, exportRowsToCsv, generateLedgerSnapshot, openWorkspace, updateRecord } from '../storage'
+import { createRecord, deleteRecord, exportRowsToCsv, generateLedgerSnapshot, openWorkspace, updateRecord } from '../storage'
 import {
   buildRelationIndex,
   relationPatchForField,
@@ -107,6 +107,26 @@ export default function ModulePanel({
     setForm(emptyRecordFor(definition))
     setBody('')
     setStatus('已取消修改。')
+  }
+
+  const handleDelete = async (record: RecordSummary) => {
+    if (!record.path) return
+    const confirmed = window.confirm(
+      `确定要删除记录 "${record.id}（${record.title}）" 吗？\n\n此操作不可撤销，相关附件和笔记也将一并删除。`,
+    )
+    if (!confirmed) return
+    try {
+      const next = await deleteRecord(snapshot.workspacePath, record.path)
+      onSnapshot(next)
+      if (editingRecord?.id === record.id) {
+        setEditingRecord(null)
+        setForm(emptyRecordFor(definition))
+        setBody('')
+      }
+      setStatus(`已删除记录 ${record.id}。`)
+    } catch (error) {
+      setStatus(`删除失败：${friendlyError(error)}`)
+    }
   }
 
   const handleLedger = async () => {
@@ -293,6 +313,15 @@ export default function ModulePanel({
                           <FolderKanban size={13} />
                         </button>
                       ) : null}
+                      <button
+                        type="button"
+                        className="icon-btn danger"
+                        title="删除记录"
+                        onClick={() => handleDelete(record)}
+                        disabled={!record.path}
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </td>
                   </tr>
                 ))
