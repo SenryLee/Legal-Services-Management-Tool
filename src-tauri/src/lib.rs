@@ -9,6 +9,7 @@ mod ai;
 mod attachments;
 mod config;
 mod demo;
+mod drafting;
 mod inbox;
 mod litigation_organizer;
 mod notes;
@@ -602,6 +603,12 @@ pub fn run() {
             attachments::add_attachments,
             attachments::delete_attachment,
             attachments::open_path_in_finder,
+            drafting::drafting_read_docx,
+            drafting::drafting_save_docx,
+            drafting::drafting_list_templates,
+            drafting::drafting_save_template,
+            drafting::drafting_delete_template,
+            drafting::drafting_update_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running legalbiz app");
