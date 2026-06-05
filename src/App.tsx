@@ -1,4 +1,4 @@
-import { AlertTriangle, FolderOpen, Inbox, LayoutDashboard, Plus, RefreshCw, Settings2, Sparkles, StickyNote, X } from 'lucide-react'
+import { AlertTriangle, FileText, FolderOpen, Inbox, LayoutDashboard, Plus, RefreshCw, Settings2, Sparkles, StickyNote, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import { ENCOURAGEMENTS } from './encouragements'
@@ -35,13 +35,14 @@ import InboxPanel from './components/InboxPanel'
 import NoteListPanel from './components/NoteListPanel'
 import ModulePanel from './components/ModulePanel'
 import SettingsPage from './components/settings/SettingsPage'
+import DocumentDrafter from './components/DocumentDrafter'
 
 type FieldFiltersByModule = Partial<Record<ModuleKey, Record<string, string>>>
 
 function App() {
   const [workspacePath, setWorkspacePath] = useState('')
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null)
-  const [active, setActive] = useState<ModuleKey | 'dashboard' | 'settings' | 'inbox' | 'notes'>('dashboard')
+  const [active, setActive] = useState<ModuleKey | 'dashboard' | 'settings' | 'inbox' | 'notes' | 'drafting'>('dashboard')
   const [month, setMonth] = useState(currentMonth)
   const [query, setQuery] = useState('')
   const [fieldFilters, setFieldFilters] = useState<FieldFiltersByModule>({})
@@ -310,6 +311,12 @@ function App() {
             label="随手笔记"
             onClick={() => setActive('notes')}
           />
+          <NavButton
+            active={active === 'drafting'}
+            icon={FileText}
+            label="文书起草"
+            onClick={() => setActive('drafting')}
+          />
           <div className="nav-separator" />
           {MODULE_ORDER.map((moduleKey) => (
             <NavButton
@@ -391,7 +398,9 @@ function App() {
                     ? '智能收件箱'
                     : active === 'notes'
                       ? '随手笔记'
-                      : config.modules[active].label}
+                      : active === 'drafting'
+                        ? '文书起草'
+                        : config.modules[active].label}
             </h1>
             <p>
               {active === 'dashboard'
@@ -478,6 +487,11 @@ function App() {
             records={records}
             aiSettings={aiSettings}
             setStatus={setStatus}
+          />
+        ) : active === 'drafting' && snapshot ? (
+          <DocumentDrafter
+            snapshot={snapshot}
+            aiSettings={aiSettings}
           />
         ) : (
           <ModulePanel
