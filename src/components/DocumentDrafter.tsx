@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/core'
-import { FileText, Upload, Wand2, Download, Trash2, ChevronRight, Loader2, Check, Edit3, X, Plus } from 'lucide-react'
+import { FileText, Upload, Wand2, Download, Trash2, ChevronRight, Loader2, Check, X, Plus } from 'lucide-react'
 import type { AISettings, WorkspaceSnapshot } from '../domain'
 import {
   type TemplateVariable,
@@ -10,7 +10,6 @@ import {
   listTemplates,
   saveTemplate,
   deleteTemplate,
-  updateTemplateMetadata,
   readDocxBase64,
   saveDocx,
   convertDocumentToTemplate,

@@ -75,7 +75,7 @@ function App() {
   }, [])
 
   const filteredRecords = useMemo(() => {
-    if (active === 'dashboard' || active === 'settings' || active === 'inbox' || active === 'notes') return records
+    if (active === 'dashboard' || active === 'settings' || active === 'inbox' || active === 'notes' || active === 'drafting') return records
     const definition = config.modules[active]
     const activeFieldFilters = fieldFilters[active] ?? {}
     const filterableFields = definition.fields.filter((field) => field.filterable)
@@ -112,7 +112,7 @@ function App() {
   }, [active, config, fieldFilters, month, query, records])
 
   const handleFieldFilter = useCallback((fieldKey: string, value: string) => {
-    if (active === 'dashboard' || active === 'settings' || active === 'inbox' || active === 'notes') return
+    if (active === 'dashboard' || active === 'settings' || active === 'inbox' || active === 'notes' || active === 'drafting') return
     setFieldFilters((prev) => {
       const current = prev[active] ?? {}
       const nextForModule = { ...current }
