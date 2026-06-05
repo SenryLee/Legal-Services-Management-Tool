@@ -414,8 +414,10 @@ export const generateDocument = async (
 
   doc.render(variables)
 
-  const outputZip = doc.getZip()
-  const buffer = await (outputZip as any).generateAsync({ type: 'base64' })
+  // docxtemplater's getZip() returns JSZip; generateAsync is the v3 method
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const outputZip: any = doc.getZip()
+  const buffer: string = await outputZip.generateAsync({ type: 'base64' })
   return buffer
 }
 
