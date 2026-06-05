@@ -495,7 +495,7 @@ function App() {
           />
         ) : (
           <ModulePanel
-            moduleKey={active}
+            moduleKey={active as ModuleKey}
             records={filteredRecords}
             allRecords={records}
             snapshot={snapshot!}
@@ -503,7 +503,7 @@ function App() {
             setMonth={setMonth}
             query={query}
             setQuery={setQuery}
-            fieldFilters={fieldFilters[active] ?? {}}
+            fieldFilters={fieldFilters[active as ModuleKey] ?? {}}
             onFieldFilter={handleFieldFilter}
             onSnapshot={handleSnapshotResult}
             setStatus={setStatus}

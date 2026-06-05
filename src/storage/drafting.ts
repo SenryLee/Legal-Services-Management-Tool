@@ -414,7 +414,8 @@ export const generateDocument = async (
 
   doc.render(variables)
 
-  const buffer = doc.getZip().generate({ type: 'base64' })
+  const outputZip = doc.getZip()
+  const buffer = await (outputZip as any).generateAsync({ type: 'base64' })
   return buffer
 }
 
