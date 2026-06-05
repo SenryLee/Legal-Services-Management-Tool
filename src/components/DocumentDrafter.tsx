@@ -317,7 +317,7 @@ export default function DocumentDrafter({ snapshot, aiSettings }: Props) {
       )}
       {progress && (
         <div style={progressBarStyle}>
-          <Loader2 size={14} className="spin" /> {progress}
+          <Loader2 size={14} className="spinning" /> {progress}
         </div>
       )}
 
