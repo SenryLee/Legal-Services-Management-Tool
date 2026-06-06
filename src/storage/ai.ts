@@ -44,9 +44,9 @@ const normalizeAiSettings = (raw: Partial<AISettings> | null | undefined): AISet
   }
 }
 
-/** AI 是否已就绪：填了 apiKey 即可 */
+/** AI 是否已就绪：apiKey 非空 或 enabled 为 true 即可 */
 export const isAiReady = (settings: AISettings): boolean =>
-  typeof settings.apiKey === 'string' && settings.apiKey.trim().length > 0
+  (typeof settings.apiKey === 'string' && settings.apiKey.trim().length > 0) || settings.enabled === true
 
 export const loadAiSettings = async (): Promise<AISettings> => {
   if (isTauri()) {
