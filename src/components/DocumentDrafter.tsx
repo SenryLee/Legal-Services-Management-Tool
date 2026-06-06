@@ -52,7 +52,9 @@ export default function DocumentDrafter({ snapshot, aiSettings }: Props) {
   // Chat state
   const [messages, setMessages] = useState<ChatMsg[]>([{
     role: 'assistant',
-    content: '你好！我是文书起草助手。请描述你需要起草的文书，例如：\n\n• "帮我写一份民事起诉状"\n• "起草一份律师函发给XX公司"\n• "拟一份借款合同"\n\n我会根据你的需求，匹配已有模板或直接为你起草。',
+    content: isAiReady(aiSettings)
+      ? '你好！我是文书起草助手。请描述你需要起草的文书，例如：\n\n• "帮我写一份民事起诉状"\n• "起草一份律师函发给XX公司"\n• "拟一份借款合同"\n\n我会根据你的需求，匹配已有模板或直接为你起草。'
+      : '👋 你好！我是文书起草助手。\n\n⚠️ 使用前请先配置 AI 服务：点击左侧「设置」→ 填写 API Key。\n\n支持 DeepSeek、OpenAI、Claude、豆包等。配置完成后，回来描述你的需求即可。',
   }])
   const [input, setInput] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -459,7 +461,13 @@ ${templateSummaries}
           onSend={async () => {
             const text = input.trim()
             if (!text || loading) return
-            if (!isAiReady(aiSettings)) { setError('请先在设置中配置 AI（填写 API Key）'); return }
+            if (!isAiReady(aiSettings)) {
+              setMessages((prev) => [...prev, {
+                role: 'assistant',
+                content: '⚠️ 还没有配置 AI 服务。请先到「设置 → AI 配置」中填写 API Key，然后就可以开始对话起草了。支持 DeepSeek、OpenAI、Claude、豆包等。',
+              }])
+              return
+            }
             const userMsg: ChatMsg = { role: 'user', content: text }
             setMessages((prev) => [...prev, userMsg])
             setInput('')
