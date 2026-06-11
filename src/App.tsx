@@ -492,6 +492,8 @@ function App() {
           <DocumentDrafter
             snapshot={snapshot}
             aiSettings={aiSettings}
+            onConfigSaved={(nextConfig) => handleSnapshotResult({ ...snapshot, config: nextConfig })}
+            setStatus={setStatus}
           />
         ) : (
           <ModulePanel

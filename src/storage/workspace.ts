@@ -76,6 +76,10 @@ const mergeDefaultConfig = (config: WorkspaceConfig): WorkspaceConfig => {
   const next: WorkspaceConfig = {
     ...config,
     version: Math.max(config.version ?? 0, defaults.version),
+    drafting: {
+      ...defaults.drafting,
+      ...(config.drafting ?? {}),
+    },
     modules: { ...config.modules },
   }
 

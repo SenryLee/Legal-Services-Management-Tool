@@ -67,9 +67,11 @@ export default function SettingsPage({
           />
         ) : tab === 'general' ? (
           <GeneralSettingsTab
+            config={config}
             workspacePath={workspacePath}
             recents={recents}
             onClearRecents={onClearRecents}
+            onConfigSaved={onConfigSaved}
             setStatus={setStatus}
           />
         ) : tab === 'fields' ? (

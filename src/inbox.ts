@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
-import { isTauri, readFileAsText, aiChat, isAiReady, createRecord, buildExtractionMessages } from './storage'
+import { isTauri, readFileAsText, aiChat, isAiReady, createRecord, buildExtractionMessages, openWorkspace } from './storage'
 import {
   MODULE_ORDER,
   type AISettings,
@@ -822,7 +822,6 @@ export const confirmAttach = async (
 
   // Browser demo: reload workspace (attachment is conceptual in demo mode)
   markEntryStatusLocal(inboxId, 'confirmed')
-  const { openWorkspace } = await import('./storage')
   return openWorkspace(workspacePath)
 }
 

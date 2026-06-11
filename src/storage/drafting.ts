@@ -1,8 +1,18 @@
 import { invoke } from '@tauri-apps/api/core'
-import JSZip from 'jszip'
 import Docxtemplater from 'docxtemplater'
 import { aiChat } from './ai'
+import { isTauri, safeParse } from './app-state'
 import type { AISettings } from '../domain'
+import { FREE_DRAFT_SYSTEM_PROMPT, TEMPLATE_DRAFT_SYSTEM_PROMPT } from './drafting-logic'
+
+export { FREE_DRAFT_SYSTEM_PROMPT, TEMPLATE_DRAFT_SYSTEM_PROMPT }
+
+type JSZipModule = typeof import('jszip')
+
+const loadJSZip = async (): Promise<JSZipModule> => {
+  const mod = (await import('jszip')) as unknown as JSZipModule | { default: JSZipModule }
+  return (mod as { default?: JSZipModule }).default ?? (mod as JSZipModule)
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,7 +34,12 @@ export interface TemplateMetadata {
   originalFilename: string
   createdAt: string
   category?: string
+  status?: TemplateStatus
+  supportsFreeDraft?: boolean
+  updatedAt?: string
 }
+
+export type TemplateStatus = 'ready' | 'new' | 'needs_conversion'
 
 export interface TemplateListItem {
   id: string
@@ -36,6 +51,8 @@ export interface TemplateListItem {
   category?: string
   docxPath: string
   metaPath: string
+  status?: TemplateStatus
+  supportsFreeDraft?: boolean
 }
 
 export interface VariableDetectionResult {
@@ -46,20 +63,124 @@ export interface VariableDetectionResult {
   rawResponse?: string
 }
 
+export interface TemplateSyncResult {
+  added: number
+  updated: number
+  incompatible: number
+  templateDir: string
+  templates: TemplateListItem[]
+}
+
+interface BrowserTemplateEntry {
+  item: TemplateListItem
+  metadata: TemplateMetadata
+}
+
+const browserTemplatesKey = (workspacePath: string): string =>
+  `legalbiz-drafting-templates:${workspacePath || 'demo'}`
+
+const browserDocxKey = (storedPath: string): string =>
+  `legalbiz-drafting-docx:${storedPath}`
+
+const browserMetaKey = (storedPath: string): string =>
+  `legalbiz-drafting-meta:${storedPath}`
+
+const readBrowserTemplateEntries = (workspacePath: string): BrowserTemplateEntry[] =>
+  safeParse<BrowserTemplateEntry[]>(localStorage.getItem(browserTemplatesKey(workspacePath)), [])
+
+const writeBrowserTemplateEntries = (workspacePath: string, entries: BrowserTemplateEntry[]): void => {
+  localStorage.setItem(browserTemplatesKey(workspacePath), JSON.stringify(entries))
+}
+
+const toTemplateListItem = (metadata: TemplateMetadata, workspacePath: string): TemplateListItem => {
+  const id = metadata.id || `template-${Date.now()}`
+  return {
+    id,
+    title: metadata.title || '未命名模板',
+    description: metadata.description || '',
+    variableCount: metadata.variables?.length ?? 0,
+    originalFilename: metadata.originalFilename || 'template.docx',
+    createdAt: metadata.createdAt || new Date().toISOString(),
+    category: metadata.category,
+    docxPath: `demo://drafting/${encodeURIComponent(workspacePath || 'demo')}/${id}.docx`,
+    metaPath: `demo://drafting/${encodeURIComponent(workspacePath || 'demo')}/${id}.json`,
+    status: metadata.status || (metadata.variables?.length ? 'ready' : 'needs_conversion'),
+    supportsFreeDraft: metadata.supportsFreeDraft || metadata.variables?.some((item) => item.placeholder === 'draft_body'),
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Rust command wrappers
 // ---------------------------------------------------------------------------
 
 export const readDocxBase64 = async (path: string): Promise<string> => {
+  if (!isTauri()) {
+    const base64 = localStorage.getItem(browserDocxKey(path))
+    if (!base64) throw new Error('浏览器演示模式未找到该模板文件。')
+    return base64
+  }
   return invoke<string>('drafting_read_docx', { path })
 }
 
 export const saveDocx = async (path: string, base64Data: string): Promise<void> => {
+  if (!isTauri()) {
+    localStorage.setItem(browserDocxKey(path), base64Data)
+    return
+  }
   await invoke('drafting_save_docx', { path, base64Data })
 }
 
 export const listTemplates = async (workspacePath: string): Promise<TemplateListItem[]> => {
+  if (!isTauri()) {
+    return readBrowserTemplateEntries(workspacePath).map((entry) => entry.item)
+  }
   return invoke<TemplateListItem[]>('drafting_list_templates', { workspacePath })
+}
+
+export const getTemplateDir = async (workspacePath: string): Promise<string> => {
+  if (!isTauri()) return `demo://${workspacePath || 'demo'}/.legalbiz/templates/docx`
+  return invoke<string>('drafting_get_template_dir', { workspacePath })
+}
+
+export const importTemplateFile = async (
+  workspacePath: string,
+  sourcePath: string,
+): Promise<string> => {
+  if (!isTauri()) throw new Error('导入模板文件仅在桌面 App 中可用。')
+  return invoke<string>('drafting_import_template_file', { workspacePath, sourcePath })
+}
+
+export const syncTemplates = async (workspacePath: string): Promise<TemplateSyncResult> => {
+  if (!isTauri()) {
+    const templates = await listTemplates(workspacePath)
+    return {
+      added: 0,
+      updated: 0,
+      incompatible: templates.filter((item) => !item.variableCount).length,
+      templateDir: await getTemplateDir(workspacePath),
+      templates,
+    }
+  }
+  return invoke<TemplateSyncResult>('drafting_sync_templates', { workspacePath })
+}
+
+export const readTemplateMetadata = async (template: TemplateListItem): Promise<TemplateMetadata> => {
+  const raw = isTauri()
+    ? await invoke<string>('inbox_read_file_text', { storedPath: template.metaPath })
+    : localStorage.getItem(browserMetaKey(template.metaPath))
+  const parsed = safeParse<Partial<TemplateMetadata>>(raw, {})
+  return {
+    id: template.id,
+    title: parsed.title || template.title,
+    description: parsed.description || template.description,
+    variables: parsed.variables || [],
+    originalFilename: parsed.originalFilename || template.originalFilename,
+    createdAt: parsed.createdAt || template.createdAt,
+    category: parsed.category || template.category,
+    status: parsed.status || template.status,
+    supportsFreeDraft: parsed.supportsFreeDraft || template.supportsFreeDraft,
+    updatedAt: parsed.updatedAt,
+  }
 }
 
 export const saveTemplate = async (
@@ -67,10 +188,35 @@ export const saveTemplate = async (
   docxBase64: string,
   metadata: TemplateMetadata,
 ): Promise<TemplateListItem> => {
+  if (!isTauri()) {
+    const normalized = {
+      ...metadata,
+      createdAt: metadata.createdAt || new Date().toISOString(),
+      status: metadata.status || 'ready' as TemplateStatus,
+      supportsFreeDraft: metadata.supportsFreeDraft || metadata.variables.some((item) => item.placeholder === 'draft_body'),
+      updatedAt: new Date().toISOString(),
+    }
+    const item = toTemplateListItem(normalized, workspacePath)
+    const entries = readBrowserTemplateEntries(workspacePath).filter((entry) => entry.item.id !== item.id)
+    writeBrowserTemplateEntries(workspacePath, [{ item, metadata: normalized }, ...entries])
+    localStorage.setItem(browserDocxKey(item.docxPath), docxBase64)
+    localStorage.setItem(browserMetaKey(item.metaPath), JSON.stringify(normalized))
+    return item
+  }
   return invoke<TemplateListItem>('drafting_save_template', { workspacePath, docxBase64, metadata })
 }
 
 export const deleteTemplate = async (workspacePath: string, templateId: string): Promise<void> => {
+  if (!isTauri()) {
+    const entries = readBrowserTemplateEntries(workspacePath)
+    const target = entries.find((entry) => entry.item.id === templateId)
+    if (target) {
+      localStorage.removeItem(browserDocxKey(target.item.docxPath))
+      localStorage.removeItem(browserMetaKey(target.item.metaPath))
+    }
+    writeBrowserTemplateEntries(workspacePath, entries.filter((entry) => entry.item.id !== templateId))
+    return
+  }
   await invoke('drafting_delete_template', { workspacePath, templateId })
 }
 
@@ -78,6 +224,31 @@ export const updateTemplateMetadata = async (
   workspacePath: string,
   metadata: TemplateMetadata,
 ): Promise<TemplateListItem> => {
+  if (!isTauri()) {
+    const entries = readBrowserTemplateEntries(workspacePath)
+    const existing = entries.find((entry) => entry.item.id === metadata.id)
+    const normalized = {
+      ...metadata,
+      status: metadata.status || 'ready' as TemplateStatus,
+      supportsFreeDraft: metadata.supportsFreeDraft || metadata.variables.some((item) => item.placeholder === 'draft_body'),
+      updatedAt: new Date().toISOString(),
+    }
+    const item = existing
+      ? {
+          ...existing.item,
+          title: normalized.title || existing.item.title,
+          description: normalized.description || '',
+          variableCount: normalized.variables?.length ?? 0,
+          category: normalized.category,
+          status: normalized.status,
+          supportsFreeDraft: normalized.supportsFreeDraft,
+        }
+      : toTemplateListItem(normalized, workspacePath)
+    const next = [{ item, metadata: normalized }, ...entries.filter((entry) => entry.item.id !== metadata.id)]
+    writeBrowserTemplateEntries(workspacePath, next)
+    localStorage.setItem(browserMetaKey(item.metaPath), JSON.stringify(normalized))
+    return item
+  }
   return invoke<TemplateListItem>('drafting_update_metadata', { workspacePath, metadata })
 }
 
@@ -90,6 +261,7 @@ export const updateTemplateMetadata = async (
  * Preserves paragraph structure (double newlines between paragraphs).
  */
 export const extractTextFromDocx = async (base64: string): Promise<string> => {
+  const JSZip = await loadJSZip()
   const zip = await JSZip.loadAsync(base64, { base64: true })
   const docXml = await zip.file('word/document.xml')?.async('text')
   if (!docXml) {
@@ -276,6 +448,7 @@ export const generateTemplateDocx = async (
   base64: string,
   replacements: Array<{ originalText: string; placeholder: string }>,
 ): Promise<string> => {
+  const JSZip = await loadJSZip()
   const zip = await JSZip.loadAsync(base64, { base64: true })
   const docXml = await zip.file('word/document.xml')?.async('text')
   if (!docXml) throw new Error('无法解析 .docx')
@@ -416,6 +589,7 @@ export const generateDocument = async (
   templateBase64: string,
   variables: Record<string, string>,
 ): Promise<string> => {
+  const JSZip = await loadJSZip()
   const zip = await JSZip.loadAsync(templateBase64, { base64: true })
   const doc = new Docxtemplater(zip, {
     paragraphLoop: true,
@@ -430,6 +604,68 @@ export const generateDocument = async (
   const outputZip: any = doc.getZip()
   const buffer: string = await outputZip.generateAsync({ type: 'base64' })
   return buffer
+}
+
+const escapeXml = (value: string): string =>
+  value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
+
+const paragraphXml = (text: string): string =>
+  `<w:p><w:r><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`
+
+export const createBuiltinFreeDraftDocx = async ({
+  draftTitle,
+  documentType,
+  draftBody,
+  riskNotes,
+}: {
+  draftTitle: string
+  documentType: string
+  draftBody: string
+  riskNotes?: string[]
+}): Promise<string> => {
+  const JSZip = await loadJSZip()
+  const zip = new JSZip()
+  const bodyParagraphs = [
+    draftTitle || documentType || '法律文书草稿',
+    '',
+    ...draftBody.split(/\r?\n/),
+    ...(riskNotes?.length ? ['', '复核提示', ...riskNotes.map((item) => `- ${item}`)] : []),
+  ].map(paragraphXml).join('')
+
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`)
+  zip.folder('_rels')?.file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`)
+  zip.folder('word')?.file('document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${bodyParagraphs}
+    <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr>
+  </w:body>
+</w:document>`)
+
+  return zip.generateAsync({ type: 'base64' })
+}
+
+export const templateSupportsPlaceholder = async (
+  templateBase64: string,
+  placeholder: string,
+): Promise<boolean> => {
+  const JSZip = await loadJSZip()
+  const zip = await JSZip.loadAsync(templateBase64, { base64: true })
+  const docXml = await zip.file('word/document.xml')?.async('text')
+  return Boolean(docXml?.includes(`{${placeholder}}`))
 }
 
 // ---------------------------------------------------------------------------

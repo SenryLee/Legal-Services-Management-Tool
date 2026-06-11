@@ -35,3 +35,4 @@ src-tauri/target
 # MCP and tooling
 .playwright-mcp/
 .claude/
+.superpowers/

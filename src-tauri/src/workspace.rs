@@ -87,6 +87,7 @@ pub fn create_workspace_dirs(root: &Path) -> AppResult<()> {
         "calendar",
         "ledgers",
         "templates",
+        ".legalbiz/templates/docx",
         "inbox",
         "inbox/pending",
         "inbox/sources",
@@ -148,7 +149,11 @@ fn read_records(root: &Path) -> AppResult<RecordReadResult> {
             !entry.path().components().any(|part| {
                 matches!(
                     part.as_os_str().to_str(),
-                    Some(".legalbiz") | Some("ledgers") | Some("templates") | Some("inbox") | Some("notes")
+                    Some(".legalbiz")
+                        | Some("ledgers")
+                        | Some("templates")
+                        | Some("inbox")
+                        | Some("notes")
                 )
             })
         })

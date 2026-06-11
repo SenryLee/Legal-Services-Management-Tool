@@ -44,6 +44,11 @@ export interface WorkspaceConfig {
   workspaceName: string
   version: number
   modules: Record<ModuleKey, ModuleDefinition>
+  drafting: {
+    defaultFreeTemplateId: string
+    templateDir: string
+    autoScanTemplates: boolean
+  }
   aiPolicy: {
     mode: 'local_first_optional_cloud'
     requireConfirmationBeforeRead: boolean
@@ -437,6 +442,11 @@ export const optionPresetFor = (moduleKey: ModuleKey, fieldKey: string): string[
 export const defaultConfig = (): WorkspaceConfig => ({
   workspaceName: '法律业务工作区',
   version: 3,
+  drafting: {
+    defaultFreeTemplateId: '',
+    templateDir: '',
+    autoScanTemplates: true,
+  },
   aiPolicy: {
     mode: 'local_first_optional_cloud',
     requireConfirmationBeforeRead: true,

@@ -75,6 +75,31 @@ pub(crate) struct AiPolicy {
     pub require_confirmation_before_write: bool,
 }
 
+fn default_auto_scan_templates() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DraftingConfig {
+    #[serde(default)]
+    pub default_free_template_id: String,
+    #[serde(default)]
+    pub template_dir: String,
+    #[serde(default = "default_auto_scan_templates")]
+    pub auto_scan_templates: bool,
+}
+
+impl Default for DraftingConfig {
+    fn default() -> Self {
+        Self {
+            default_free_template_id: String::new(),
+            template_dir: String::new(),
+            auto_scan_templates: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct WorkspaceConfig {
@@ -82,6 +107,8 @@ pub(crate) struct WorkspaceConfig {
     pub version: u32,
     pub modules: BTreeMap<String, ModuleDefinition>,
     pub ai_policy: AiPolicy,
+    #[serde(default)]
+    pub drafting: DraftingConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -606,6 +633,9 @@ pub fn run() {
             drafting::drafting_read_docx,
             drafting::drafting_save_docx,
             drafting::drafting_list_templates,
+            drafting::drafting_get_template_dir,
+            drafting::drafting_import_template_file,
+            drafting::drafting_sync_templates,
             drafting::drafting_save_template,
             drafting::drafting_delete_template,
             drafting::drafting_update_metadata,

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::{AiPolicy, FieldDefinition, ModuleDefinition, WorkspaceConfig};
+use crate::{AiPolicy, DraftingConfig, FieldDefinition, ModuleDefinition, WorkspaceConfig};
 
 pub fn default_config(root: &Path) -> WorkspaceConfig {
     let workspace_name = root
@@ -335,6 +335,7 @@ pub fn default_config(root: &Path) -> WorkspaceConfig {
             require_confirmation_before_read: true,
             require_confirmation_before_write: true,
         },
+        drafting: DraftingConfig::default(),
     }
 }
 
